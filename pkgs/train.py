@@ -30,7 +30,77 @@ class trainer():
         self.integrator = integrate(device)
         self.loss = torch.nn.MSELoss();
         self.filename = filename;
+    
+    def pretrain_subspace(self, data_in, labels, norbs = 10, kE=0.1, steps=10) -> float:
+
+        # Train the model using given data points
+        # M: number of data points, N: number of atoms, B: number of basis
+        # pos_list: MxNx3 list of coordinates of input configurations
+        # elements_list: MxN list of atomic species, 'C' or 'H'
+        # E_list: M list of energy, unit Hartree
+        # S_list: MxBxB list of overlap matrix <phi_i|phi_j>
+        # N_list: MxBxB list of density matrix <phi_i|N|phi_j>
+        # steps: steps to train using this dataset.
+        # This method implements gradient descend to the contained model
+        # and return the average loss
+
+        L_ave = np.array([0., 0.])  # output average loss
+
+        S = labels['S'];  # overlap matrix
+        LB, PhiB = torch.linalg.eigh(S);
+        PhiB = torch.einsum('ijk,ik->ijk',[PhiB,LB**(-1/2)]);
+        h = labels['h'];
         
+        HF =torch.matmul(torch.matmul(PhiB.permute(0,2,1), h), PhiB);
+        Lh, Phih = torch.linalg.eigh(HF);
+        Lh = torch.diag_embed(Lh[:,:norbs]);
+        Phih = torch.matmul(PhiB, Phih);
+        c_r  = Phih[:,:,:norbs];
+        
+        # number of occupied orbitals
+        ne = data_in['properties']['ne'];
+        
+        E = labels['E'];  # ccsdt total energy
+        
+        for _ in range(steps):  # outer loop of training steps
+        
+            ########### forward calculations ################
+            # apply the NN-model to get K-S potential
+            V = self.model(data_in);
+            V_subspace = torch.matmul(c_r.permute(0,2,1), V);
+            V_subspace = torch.matmul(V_subspace, c_r);
+            LV = self.loss(V_subspace, Lh);
+            if(kE != 0):
+                A =torch.matmul(torch.matmul(PhiB.permute(0,2,1), V.detach()), PhiB);
+                LA, PhiA = torch.linalg.eigh(A);
+                Phi = torch.matmul(PhiB,PhiA);
+                Ehat = 2*torch.sum(LA[:, :ne], axis=1);
+                co = Phi[:, :, :ne];
+                LE = 2*(Ehat-E)*(2*torch.einsum('uij,ukj,uik->u',
+                                              [co, co, V]));  # energy term loss function for gradient
+            
+            if(kE==0):
+                L = LV;
+                
+            else:
+                L = LV+kE*torch.mean(LE);
+                L_ave[1] += self.loss(Ehat,E);
+        ########### calculate loss for output #######
+
+            L_ave[0] += LV;
+            
+            ########### back propagation and optimization #####
+
+            self.optim.zero_grad()  # clear gradient
+
+            L.backward()  # calculate the gradient
+
+            self.optim.step()  # implement gradient descend
+        
+        torch.save(self.model.state_dict(), self.filename);
+        
+        return L_ave/steps
+    
     def pretrain(self, data_in, labels, kE=0.1, steps=10) -> float:
 
         # Train the model using given data points
