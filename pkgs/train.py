@@ -70,12 +70,12 @@ class trainer():
                 co = Phi[:, :, :ne];
                 LE = 2*(Ehat-E)*(2*torch.einsum('uij,ukj,uik->u',
                                               [co, co, V]));  # energy term loss function for gradient
-            normalizer = sum([torch.linalg.norm(u)**2 for u in self.model.parameters()]);
+            
             if(kE==0):
                 L = LV;
                 
             else:
-                L = LV+kE*torch.mean(LE)+10**-6*normalizer;
+                L = LV+kE*torch.mean(LE);
                 L_ave[1] += self.loss(Ehat,E);
         ########### calculate loss for output #######
 
