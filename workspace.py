@@ -6,7 +6,7 @@ from pkgs.dataframe import load_data;
 from pkgs.model import V_theta;
 
 device = 'cpu';
-data, labels = load_data('Methane', device,ind_list=[1,2,3]);
+data, labels = load_data('Methane', device,ind_list=range(50));
 
 model = V_theta(device);
 
