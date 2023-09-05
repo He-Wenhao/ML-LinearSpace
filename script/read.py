@@ -3,6 +3,7 @@ import numpy as np;
 import json;
 from ase.io.cube import read_cube_data;
 import torch;
+import scipy;
 
 class integrate():
 
@@ -39,6 +40,53 @@ class integrate():
             psi += c[ii]*outer_product;
         return psi;
     # to class, read document when initialize
+
+    def calc_F(self, data, elements, c, ngrid = 20):
+
+        # N: number of atoms, M: number of basis, ne: number of occupied orbitals
+        # give pos: Nx3 tensor atomic coordinates and elements: N-dim species list ['C','H', ...]
+        # and the MxM tensor wave function vectors c from the K-S equation.
+        # This function outputs an ne x (M-ne) Pytorch tensor that output
+        # ci * (sum_j ci*F*cj) * ck for all (i,k) pairs
+        ############ read orbital information into all_orbs ###############
+        angstron2Bohr = 1.88973;
+        all_orbs = [];
+        batch =  data.batch;
+        pos = data.pos*angstron2Bohr;
+        for i in range(len(batch)):
+            if(batch[i]==0):
+                all_orbs += self.orbs_elements[elements[i]];
+            else:
+                break;
+
+        ############ calculate all orbitals on grid (psi_all) #############
+        crd_min, crd_max = torch.min(pos,axis=0)[0],torch.max(pos,axis=0)[0];
+        xx = torch.linspace(crd_min[0]-5, crd_max[0]+5, ngrid).to(self.device);
+        yy = torch.linspace(crd_min[1]-5, crd_max[1]+5, ngrid).to(self.device);
+        zz = torch.linspace(crd_min[2]-5, crd_max[2]+5, ngrid).to(self.device);
+        norbs = len(all_orbs);
+        nbatch = torch.max(batch)+1;
+        pos_e = pos[[2*i for i in range(nbatch)]].to(self.device);
+        pos_o = pos[[2*i+1 for i in range(nbatch)]].to(self.device);
+        ne = 1; #int(round(sum([(ele=='C')*5+1 for ele in elements])/2));
+        psi_all = torch.zeros((norbs, nbatch, ngrid, ngrid, ngrid)).to(self.device);
+        for iorb in range(norbs):
+            orb_tmp = all_orbs[iorb];
+            if(iorb<5):
+                crd = pos_e;
+            else:
+                crd = pos_o;
+
+            psi_all[iorb] = self.calc_psi(orb_tmp, crd, xx, yy,zz);
+        ########### calculate Fik ##########################################
+
+        dV = (xx[1]-xx[0])*(yy[1]-yy[0])*(zz[1]-zz[0]); # volume element
+        psi_c = torch.einsum('uij,iuklm->juklm',[c,psi_all]); # K-S eigen wave functions
+        # implement ci * (sum_j ci*F*cj) * ck
+        Fm = torch.einsum('julmn,julmn->ulmn',[psi_c[:ne], psi_c[:ne]]);
+        Fik = torch.einsum('iuabc,uabc,kuabc->uik',[psi_c[:ne], Fm, psi_c[ne:]]);  
+
+        return 2*Fik*dV; # the factor of 2 is fro
 
     def calc_S(self, pos, atm, grid):
         angstron2Bohr = 1.88973;
@@ -101,7 +149,7 @@ class integrate():
 
             orb_tmp = all_orbs[iorb];
             crd = pos[:,map1[iorb],:];
-            psi_all[iorb] = self.calc_psi(orb_tmp, crd, xx, yy, zz);
+            psi_all[iorb] = self.calc_psi(orb_tmp, crd, xx, yy,zz);
         ########### calculate Sik ##########################################
 
         nr = torch.tensor(nr).to(self.device);
@@ -121,7 +169,7 @@ route = os.getcwd()+'/';
 
 for i in range(Nframe):
     print(i);
-    res = os.popen("grep 'MDCI Energy' "+str(i)+'/run_property.txt').readline();
+    res = os.popen("grep 'E(TOT)' "+str(i)+'/log').readline();
     if(len(res)!=0):
         E1 = float(res.split()[-1][:-1]);
     else:
@@ -155,7 +203,6 @@ for i in range(Nframe):
         nr.append(False);
         grid.append(False);
 
-
 def readmat(data):
     number = int(data[-1].split()[0])+1;
     rep = int(round(len(data)/(number+1)));
@@ -165,13 +212,13 @@ def readmat(data):
         res = [[float(t) for t in s.split()[1:]] for s in data[i*(number+1)+1:i*(number+1)+number+1]];
         matl.append(np.array(res));
         
-    mat = np.hstack(matl);
+    mat = np.hstack(matl)
     return mat;
 
 mlist = [];
 slist = [];
 for i in range(Nframe):
-    with open(str(i)+'/log', 'r') as file:
+    with open('PVDZ/methane/'+str(i)+'/log', 'r') as file:
         output =  file.readlines();
         u =  0;
     
@@ -179,8 +226,8 @@ for i in range(Nframe):
             u += 1;
             if('OVERLAP MATRIX' in output[u]):
                 s = int(u)+1;
-            if('INITIAL GUESS: MOREAD' in output[u]):
-                t = int(u)-1;
+            if('Time for model grid setup' in output[u]):
+                t = int(u);
         v = int(u);
         while('Fock matrix for operator 0' not in output[v]):
             v -= 1;
@@ -188,11 +235,14 @@ for i in range(Nframe):
     
         dataS = output[s+1:t];
     
-    h = readmat(dataf);
-    mlist.append(h.tolist());
-    
+    h_raw = readmat(dataf);
     S = readmat(dataS);
+    S = scipy.linalg.fractional_matrix_power(S,-1/2);
+
+    h = np.matmul(np.matmul(S, h_raw),S);
+
     slist.append(S.tolist());
+    mlist.append(h.tolist());
 
 integrator = integrate('cpu');
 Nik = [];
@@ -200,8 +250,9 @@ Sik = [];
 
 for i in range(50):
     Nik += integrator.calc_N(posl[10*i:10*i+10],atm[10*i:10*i+10],nr[10*i:10*i+10],grid[10*i:10*i+10]).tolist();
-    Sik += integrator.calc_S(posl[10*i:10*i+10],atm[10*i:10*i+10],grid[10*i:10*i+10]).tolist();
+
 output = {'coordinates':posl, 'elements':atm, 'S':slist, 'h':mlist, 'energy':Elist, 'N':Nik};
 
 with open('data.json','w') as file:
     json.dump(output, file);
+
