@@ -13,7 +13,7 @@ import torch;
 
 class to_mat():
     
-    def __init__(self, device, J_max = 4):
+    def __init__(self, device, J_max = 3):
         self.device = device;
         self.CGdic = {};
         for j1 in range(J_max):
@@ -99,6 +99,9 @@ class to_mat():
         if(J1==1 and J2==1):
             
             num1, num2 = [2,3], [2,3];
+        
+        elif(J1==2 and J2 == 1):
+            num1, num2 = [3,6,5], [2,3];
         
         elif(J1==2 and J2==2):
             
