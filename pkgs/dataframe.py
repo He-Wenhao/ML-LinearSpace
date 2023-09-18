@@ -22,7 +22,7 @@ def load_data(molecule, device, ind_list = []):
         elements = data['elements'][0];
         
         ne = int(round(sum([1+5*(ele=='C') for ele in elements])/2));
-        norbs = int(round(sum([14+16*(ele=='C') for ele in elements])));
+        norbs = int(round(sum([5+9*(ele=='C') for ele in elements])));
         nframe = len(pos);
         
         data_in = {'pos':pos,'elements':elements,
@@ -31,14 +31,15 @@ def load_data(molecule, device, ind_list = []):
         labels = {'S': torch.tensor(data['S']).to(device),
                   'N': torch.tensor(data['N']).to(device),
                   'h': torch.tensor(data['h']).to(device),
-                  'E': torch.tensor(data['energy']).to(device)};
+                  'E': torch.tensor(data['energy']).to(device),
+                  'E_nn':torch.tensor(data['Enn']).to(device)};
     else:
         pos = torch.tensor(data['coordinates'])[ind_list].to(device);
         pos[:,:,[0,1,2]] = pos[:,:,[1,2,0]];
         elements = data['elements'][0];
         
         ne = int(round(sum([1+5*(ele=='C') for ele in elements])/2));
-        norbs = int(round(sum([14+16*(ele=='C') for ele in elements])));
+        norbs = int(round(sum([5+9*(ele=='C') for ele in elements])));
         nframe = len(pos);
         
         data_in = {'pos':pos,'elements':elements,
@@ -47,6 +48,7 @@ def load_data(molecule, device, ind_list = []):
         labels = {'S': torch.tensor(data['S'])[ind_list].to(device),
                   'N': torch.tensor(data['N'])[ind_list].to(device),
                   'h': torch.tensor(data['h'])[ind_list].to(device),
-                  'E': torch.tensor(data['energy'])[ind_list].to(device)};
+                  'E': torch.tensor(data['energy'])[ind_list].to(device),
+                  'E_nn':torch.tensor(data['Enn'])[ind_list].to(device)};
         
     return data_in, labels;  
