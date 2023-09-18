@@ -7,7 +7,7 @@ from pkgs.tomat import to_mat;
 
 class V_theta(torch.nn.Module):
     
-    def __init__(self, device, min_radius: float = 0.5, max_radius: float = 2, emb_neurons: int = 16) -> None:
+    def __init__(self, device, min_radius: float = 0.5, max_radius: float = 2.5, emb_neurons: int = 16) -> None:
         super().__init__()
         
         # Initialize a Equivariance graph convolutional neural network
@@ -20,30 +20,19 @@ class V_theta(torch.nn.Module):
         self.device = device;
         self.transformer = to_mat(device);
         
-        self.Irreps_HH = [["9x0e","6x1o","3x2e"],
-                         ["6x1o",("1x0e+1x1e+1x2e+"*4)[:-1],("1x1o+1x2o+1x3o+"*2)[:-1]],
-                         ["3x2e",("1x1o+1x2o+1x3o+"*2)[:-1],"1x0e+1x1e+1x2e+1x3e+1x4e"]];
+        self.Irreps_HH = [["4x0e","2x1o"],
+                         ["2x1o","1x0e+1x1e+1x2e"]];
         
-        self.Irreps_CC = [["16x0e","12x1o","8x2e","4x3o"],                         
-                         ["12x1o",("1x0e+1x1e+1x2e+"*9)[:-1],
-                          ("1x1o+1x2o+1x3o+"*6)[:-1],
-                          ("1x2e+1x3e+1x4e+"*3)[:-1]],           
-                         ["8x2e",("1x1o+1x2o+1x3o+"*6)[:-1],
-                          ("1x0e+1x1e+1x2e+1x3e+1x4e+"*4)[:-1], 
-                          ("1x1o+1x2o+1x3o+1x4o+1x5o+"*2)[:-1],
-                          ],
-                         ["4x3o",("1x2e+1x3e+1x4e+"*3)[:-1],
-                          ("1x1o+1x2o+1x3o+1x4o+1x5o+"*2)[:-1],
-                          "0e+1e+2e+3e+4e+5e+6e"]];
+        self.Irreps_CC = [["9x0e","6x1o","3x2e"],                         
+                         ["6x1o",("1x0e+1x1e+1x2e+"*4)[:-1],
+                          ("1x1o+1x2o+1x3o+"*2)[:-1]],           
+                         ["3x2e",("1x1o+1x2o+1x3o+"*2)[:-1],
+                          "1x0e+1x1e+1x2e+1x3e+1x4e" 
+                          ]];
         
-        self.Irreps_CH = [["12x0e","8x1o","4x2e"],                         
-                         ["9x1o",("1x0e+1x1e+1x2e+"*6)[:-1],
-                          ("1x1o+1x2o+1x3o+"*3)[:-1]],           
-                         ["6x2e",("1x1o+1x2o+1x3o+"*4)[:-1],
-                          ("1x0e+1x1e+1x2e+1x3e+1x4e+"*2)[:-1]
-                          ],
-                         ["3x3o",("1x2e+1x3e+1x4e+"*2)[:-1],
-                          "1x1o+1x2o+1x3o+1x4o+1x5o"]];
+        self.Irreps_CH = [["6x0e","3x1o"],                         
+                         ["4x1o",("1x0e+1x1e+1x2e+"*2)[:-1]],           
+                         ["2x2e","1x1o+1x2o+1x3o"]];
         
         out = "";
         for f in self.Irreps_HH:
@@ -63,8 +52,8 @@ class V_theta(torch.nn.Module):
         
         self.irreps_sh = o3.Irreps.spherical_harmonics(lmax=2);
         self.irreps_input = o3.Irreps("2x0e");
-        irreps_mid1 = o3.Irreps("32x0e + 32x1o + 32x2e");
-        irreps_mid2 = o3.Irreps("16x0e + 16x1o + 16x2e + 16x3o + 16x4e");
+        irreps_mid1 = o3.Irreps("16x0e + 16x1o + 16x2e");
+        irreps_mid2 = o3.Irreps("8x0e + 8x0o + 8x1e + 8x1o + 8x2e + 8x2o + 8x3e + 8x3o +8x4e + 8x4o");
 
         self.tp1 = o3.FullyConnectedTensorProduct(
             irreps_in1=self.irreps_input,
@@ -93,12 +82,14 @@ class V_theta(torch.nn.Module):
             shared_weights=False
         )
         
-        self.tpCC = o3.FullyConnectedTensorProduct(
-            irreps_in1=irreps_mid2,
-            irreps_in2=self.irreps_sh,
-            irreps_out=self.Irreps_CC,
-            shared_weights=False
-        )
+# =============================================================================
+#         self.tpCC = o3.FullyConnectedTensorProduct(
+#             irreps_in1=irreps_mid2,
+#             irreps_in2=self.irreps_sh,
+#             irreps_out=self.Irreps_CC,
+#             shared_weights=False
+#         )
+# =============================================================================
         
         self.tpCH = o3.FullyConnectedTensorProduct(
             irreps_in1=irreps_mid2,
@@ -124,11 +115,11 @@ class V_theta(torch.nn.Module):
         self.fc2 = nn.FullyConnectedNet([1, emb_neurons,emb_neurons, self.tp2.weight_numel], torch.relu);
         self.fc_bond = nn.FullyConnectedNet([1, emb_neurons,emb_neurons, self.bond_feature.weight_numel], torch.relu);
 
-        self.fcHH = nn.FullyConnectedNet([1, emb_neurons,emb_neurons, self.tpHH.weight_numel], torch.relu);
-        self.fcCC = nn.FullyConnectedNet([1, emb_neurons,emb_neurons, self.tpCC.weight_numel], torch.relu);
-        self.fcCH = nn.FullyConnectedNet([1, emb_neurons,emb_neurons, self.tpCH.weight_numel], torch.relu);
-        self.fcC = nn.FullyConnectedNet([1, emb_neurons,emb_neurons, self.tpC.weight_numel], torch.relu);
-        self.fcH = nn.FullyConnectedNet([1, emb_neurons,emb_neurons, self.tpH.weight_numel], torch.relu);
+        self.fcHH = nn.FullyConnectedNet([1, emb_neurons,emb_neurons,emb_neurons, self.tpHH.weight_numel], torch.relu);
+#        self.fcCC = nn.FullyConnectedNet([1, emb_neurons,emb_neurons, self.tpCC.weight_numel], torch.relu);
+        self.fcCH = nn.FullyConnectedNet([1, emb_neurons,emb_neurons,emb_neurons, self.tpCH.weight_numel], torch.relu);
+        self.fcC = nn.FullyConnectedNet([1, emb_neurons,emb_neurons,emb_neurons, self.tpC.weight_numel], torch.relu);
+        self.fcH = nn.FullyConnectedNet([1, emb_neurons,emb_neurons,emb_neurons, self.tpH.weight_numel], torch.relu);
         
     def forward(self, data_in) -> torch.Tensor:
         
@@ -143,12 +134,16 @@ class V_theta(torch.nn.Module):
         nframe = data_in['properties']['nframe'];
         natm = len(data_in['elements']);
         norbs = data_in['properties']['norbs'];
+        num_nodes = nframe*natm;
         
         pos = data_in['pos'].reshape([-1,3]);
-        batch = torch.tensor([int(i//natm) for i in range(len(pos))]).to(self.device);
-        num_nodes = len(pos);
+        batch = torch.tensor([int(i//natm) for i in range(num_nodes)]).to(self.device);
+        
         edge_src, edge_dst = radius_graph(x=pos, r=self.max_radius, batch=batch);
-
+        self_edge = torch.tensor([i for i in range(num_nodes)]).to(self.device);
+        edge_src = torch.cat((edge_src, self_edge));
+        edge_dst = torch.cat((edge_dst, self_edge));
+        
         edge_vec = pos[edge_src] - pos[edge_dst];
         num_neighbors = len(edge_src) / num_nodes;
 
@@ -165,7 +160,7 @@ class V_theta(torch.nn.Module):
         f_in = torch.tensor([self.element_embedding[u] for u in data_in['elements']]*nframe,
                             dtype=torch.float).to(self.device);
         
-        CC_ind = torch.argwhere(f_in[edge_src][:,0]*f_in[edge_dst][:,0]).reshape(-1);
+#        CC_ind = torch.argwhere(f_in[edge_src][:,0]*f_in[edge_dst][:,0]).reshape(-1);
         HH_ind = torch.argwhere(f_in[edge_src][:,1]*f_in[edge_dst][:,1]).reshape(-1);
         CH_ind = torch.argwhere(f_in[edge_src][:,0]*f_in[edge_dst][:,1]).reshape(-1);
         
@@ -175,28 +170,28 @@ class V_theta(torch.nn.Module):
         node_feature = scatter(edge_feature, edge_dst, dim=0, dim_size=num_nodes).div(num_neighbors**0.5);
         
         HH_feature = self.bond_feature(node_feature[edge_src[HH_ind]], node_feature[edge_dst[HH_ind]],self.fc_bond(emb[HH_ind]));
-        CC_feature = self.bond_feature(node_feature[edge_src[CC_ind]], node_feature[edge_dst[CC_ind]],self.fc_bond(emb[CC_ind]));
+#        CC_feature = self.bond_feature(node_feature[edge_src[CC_ind]], node_feature[edge_dst[CC_ind]],self.fc_bond(emb[CC_ind]));
         CH_feature = self.bond_feature(node_feature[edge_src[CH_ind]], node_feature[edge_dst[CH_ind]],self.fc_bond(emb[CH_ind]));
         
         edge_HH = self.tpHH(HH_feature, sh[HH_ind], self.fcHH(emb[HH_ind]));
-        edge_CC = self.tpCC(CC_feature, sh[CC_ind], self.fcCC(emb[CC_ind]));
+#        edge_CC = self.tpCC(CC_feature, sh[CC_ind], self.fcCC(emb[CC_ind]));
         edge_CH = self.tpCH(CH_feature, sh[CH_ind], self.fcCH(emb[CH_ind]));
-        edge_HH = self.transformer.transform(edge_HH, 2,2);
-        edge_CC = self.transformer.transform(edge_CC, 3,3);
-        edge_CH = self.transformer.transform(edge_CH, 3,2);
+        edge_HH = self.transformer.transform(edge_HH, 1,1);
+#        edge_CC = self.transformer.transform(edge_CC, 3,3);
+        edge_CH = self.transformer.transform(edge_CH, 2,1);
         
         edge_C = self.tpC(node_feature[edge_src], sh, self.fcC(emb));
         node_C = scatter(edge_C, edge_dst, dim=0, dim_size=num_nodes).div(num_neighbors**0.5);
-        node_C = self.transformer.transform(node_C,3,3);
+        node_C = self.transformer.transform(node_C,2,2);
         edge_H = self.tpH(node_feature[edge_src], sh, self.fcH(emb));
         node_H = scatter(edge_H, edge_dst, dim=0, dim_size=num_nodes).div(num_neighbors**0.5);
-        node_H = self.transformer.transform(node_H,2,2);
+        node_H = self.transformer.transform(node_H,1,1);
         Vmat = [torch.zeros([norbs, norbs], dtype=torch.float).to(self.device) for i in range(nframe)];
         
-        map1 = [14+16*(ele=='C') for ele in data_in['elements']];
+        map1 = [5+9*(ele=='C') for ele in data_in['elements']];
         map1 = [sum(map1[:i]) for i in range(len(map1)+1)];
         
-        for i in range(len(node_C)):
+        for i in range(num_nodes):
             frame = batch[i];
             v = i-frame*natm;
             if(f_in[i,0]):
@@ -210,12 +205,17 @@ class V_theta(torch.nn.Module):
             v1 = u1-frame*natm;
             v2 = u2-frame*natm;
             Vmat[frame][map1[v1]:map1[v1+1], map1[v2]:map1[v2+1]] = edge_HH[i];
-        for i in range(len(CC_ind)):
-            u1,u2 = edge_src[CC_ind[i]],edge_dst[CC_ind[i]];
-            frame = batch[u1];
-            v1 = u1-frame*natm;
-            v2 = u2-frame*natm;
-            Vmat[frame][map1[v1]:map1[v1+1], map1[v2]:map1[v2+1]] = edge_CC[i];
+
+# =============================================================================
+#         for i in range(len(CC_ind)):
+#             u1,u2 = edge_src[CC_ind[i]],edge_dst[CC_ind[i]];
+#             frame = batch[u1];
+#             v1 = u1-frame*natm;
+#             v2 = u2-frame*natm;
+#             Vmat[frame][map1[v1]:map1[v1+1], map1[v2]:map1[v2+1]] = edge_CC[i];
+# 
+# =============================================================================
+
         for i in range(len(CH_ind)):
             u1,u2 = edge_src[CH_ind[i]],edge_dst[CH_ind[i]];
             frame = batch[u1];
