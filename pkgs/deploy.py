@@ -10,11 +10,15 @@ from pkgs.integral import integrate
 from pkgs.model import V_theta
 import numpy as np
 import torch
-
+from pkgs.tomat import to_mat;
+import os;
+import json;
+import matplotlib;
+import matplotlib.pyplot as plt;
 
 class estimator():
 
-    def __init__(self, device, ngrid=30) -> None:
+    def __init__(self, device, output_folder='test_output') -> None:
 
         # Initialize a neural network model, an optimizer,
         # and set training parameters.
@@ -23,46 +27,76 @@ class estimator():
         # lr: learning rate
 
         self.device = device
-        self.model = V_theta(device).to(device)
-        self.ngrid = ngrid
         self.integrator = integrate(device)
         self.loss = torch.nn.MSELoss();
-    
+        self.transformer = to_mat(device);
+        self.output_folder = output_folder;
+        if(not os.path.exists(output_folder)):
+            os.mkdir(output_folder);
+        
     def load(self, filename):
         
-        self.model.load_state_dict(torch.load(filename));
-    
-    def solve(self, data_in) -> float:
+        self.model = V_theta(self.device).to(self.device)
+        
+        try:
+            self.model.load_state_dict(torch.load(filename));
+        except:
+            res = torch.load(filename);
+            for key in list(res.keys()):
+                res[key[7:]] = res[key];
+                del res[key];
+            self.model.load_state_dict(res);
+        
+    def solve(self, minibatch, labels, save_filename='data') -> float:
 
-        # Train the model using given data points
-        # M: number of data points, N: number of atoms, B: number of basis
-        # pos_list: MxNx3 list of coordinates of input configurations
-        # elements_list: MxN list of atomic species, 'C' or 'H'
-        # E_list: M list of energy, unit Hartree
-        # S_list: MxBxB list of overlap matrix <phi_i|phi_j>
-        # N_list: MxBxB list of density matrix <phi_i|N|phi_j>
-        # steps: steps to train using this dataset.
-        # This method implements gradient descend to the contained model
-        # and return the average loss
-
-        S = self.integrator.calc_S_deploy(data_in);
-        LB, PhiB = torch.linalg.eigh(S);
-        PhiB = torch.einsum('ijk,ik->ijk',[PhiB,LB**(-1/2)]);
-
+        h = labels['h'];
+        
         # number of occupied orbitals
-        ne = int(sum([1+5*(ele=='C') for ele in data_in['elements']])/2);
+        ne = labels['ne'];
         
-        V = self.model(data_in);
+        E = labels['Ee'];  # ccsdt total energy
+        
+        V_raw = self.model(minibatch);
+        
+        V = self.transformer.raw_to_mat(V_raw,minibatch,labels);
+        
+        H = h + V;
 
-        A =torch.matmul(torch.matmul(PhiB.permute(0,2,1), V.detach()), PhiB);
-        LA, PhiA = torch.linalg.eigh(A);
+        LA, Phi = torch.linalg.eigh(H.detach());
+        Ehat = 2*torch.sum(LA[:, :ne], axis=1);
+        with open(self.output_folder+'/'+save_filename+'.json','w') as file:
+            json.dump({'Ee':E.tolist(), 'Ehat':Ehat.tolist()},file)
         
-        self.epsilon = LA;
-        self.Phi = torch.matmul(PhiB,PhiA);
-        self.E = 2*torch.sum(LA[:, :ne], axis=1);
+        return Ehat, E;
     
-        return {'energy': self.E, 'orbital_energy':self.epsilon, 
-                'eigenfunction': self.Phi};
+    def plot(self, molecule_list):
+        
+        font = {'size' : 18}
+
+        matplotlib.rc('font', **font)
+        plt.figure(figsize=(6*len(molecule_list),5.5));
+        res = [];
+        for i in range(len(molecule_list)):
+            
+            with open(self.output_folder+'/'+molecule_list[i]+'.json','r') as file:
+                
+                data = json.load(file);
+            
+            E = data['Ee'];
+            Ehat = data['Ehat'];
+            
+            plt.subplot(1,len(molecule_list),i+1);
+            
+            plt.scatter(np.array(E)*27.211,np.array(Ehat)*27.211);
+            plt.title(molecule_list[i]);
+            plt.xlabel('E$_{CCSDT}$  (eV)');
+            plt.ylabel('E$_{NN}$  (eV)');
+            res.append(np.mean((np.array(E)-np.array(Ehat))**2));
+            
+        plt.tight_layout();
+
+        print('Standard deviation error:');
+        print(str(np.sqrt(np.mean(res))/1.594*10**3)+' kcal/mol');
     
     
     

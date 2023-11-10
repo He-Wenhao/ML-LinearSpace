@@ -88,7 +88,6 @@ class integrate():
         return Sik;
 
 
-
     def calc_N(self, pos, atm, nr, grid):
         
         angstron2Bohr = 1.88973;
@@ -187,11 +186,11 @@ class integrate():
     
         return 2*Fik; # the factor of 2 is from spin
     
-    def calc_S_deploy(self, data_in, ngrid=30):
+    def calc_S_deploy(self, data_in, ngrid=100):
         
         angstron2Bohr = 1.88973;
         all_orbs = [];
-        pos = data_in['pos']*angstron2Bohr;
+        pos = data_in['pos'][:,:,[2,0,1]]*angstron2Bohr;
         map1 = [];
         map_ind = 0;        
         
@@ -206,17 +205,17 @@ class integrate():
         ############ calculate all orbitals on grid (psi_all) #############
         norbs = len(all_orbs);
         nbatch = len(pos);
-
+        
         crd_min, crd_max = torch.min(pos,axis=1)[0],torch.max(pos,axis=1)[0];
-
+        
         xx = torch.stack([torch.linspace(crd_min[i][0]-5, crd_max[i][0]+5, ngrid) for i in range(nbatch)]).to(self.device);
         yy = torch.stack([torch.linspace(crd_min[i][1]-5, crd_max[i][1]+5, ngrid) for i in range(nbatch)]).to(self.device);
         zz = torch.stack([torch.linspace(crd_min[i][2]-5, crd_max[i][2]+5, ngrid) for i in range(nbatch)]).to(self.device);
-
+        
         psi_all = torch.zeros((norbs, nbatch, ngrid, ngrid, ngrid)).to(self.device);
         
         for iorb in range(norbs):
-
+            
             orb_tmp = all_orbs[iorb];
             crd = pos[:,map1[iorb],:];
             psi_all[iorb] = self.calc_psi(orb_tmp, crd, xx, yy,zz);
@@ -224,6 +223,6 @@ class integrate():
         
         dV = (xx[:,1]-xx[:,0])*(yy[:,1]-yy[:,0])*(zz[:,1]-zz[:,0]); # volume element
         Sik = torch.einsum('iulmn,kulmn,u->uik',[psi_all,psi_all, dV]);
-
+        
         return Sik;
     

@@ -129,6 +129,61 @@ class to_mat():
         v = [torch.cat([Vu for Vu in Varray[u]],dim=2) for u in range(J1+1)];
         
         return torch.cat(v,dim=1);
+    
+    def raw_to_mat(self, V_raw, minibatch, labels):
+        
+        node_H = self.transform(V_raw['H'],1,1);
+        node_C = self.transform(V_raw['C'],2,2);
+        edge_HH = self.transform(V_raw['HH'],1,1);
+        edge_CH = self.transform(V_raw['CH'],2,1);
+        edge_CC = self.transform(V_raw['CC'],2,2);
+        norbs = labels['norbs'];
+        nframe = labels['nframe'];
+        map1 = labels['map1'];
+        num_nodes = minibatch['num_nodes'];
+        batch = labels['batch'];
+        natm = labels['natm'];
+        f_in = minibatch['f_in'];
+        HH_ind = minibatch['HH_ind'];
+        CC_ind = minibatch['CC_ind'];
+        CH_ind = minibatch['CH_ind'];
+        edge_src = minibatch['edge_src'];
+        edge_dst = minibatch['edge_dst'];
+        
+        Vmat = [torch.zeros([norbs, norbs], dtype=torch.float).to(self.device) for i in range(nframe)];
+        
+        for i in range(num_nodes):
+            frame = batch[i];
+            v = i-frame*natm;
+            if(f_in[i,0]):
+                Vmat[frame][map1[v]:map1[v+1],map1[v]:map1[v+1]] = node_C[i];
+            else:
+                Vmat[frame][map1[v]:map1[v+1],map1[v]:map1[v+1]] = node_H[i];
+            
+        for i in range(len(HH_ind)):
+            u1,u2 = edge_src[HH_ind[i]],edge_dst[HH_ind[i]];
+            frame = batch[u1];
+            v1 = u1-frame*natm;
+            v2 = u2-frame*natm;
+            Vmat[frame][map1[v1]:map1[v1+1], map1[v2]:map1[v2+1]] = edge_HH[i];
 
+        for i in range(len(CC_ind)):
+            u1,u2 = edge_src[CC_ind[i]],edge_dst[CC_ind[i]];
+            frame = batch[u1];
+            v1 = u1-frame*natm;
+            v2 = u2-frame*natm;
+            Vmat[frame][map1[v1]:map1[v1+1], map1[v2]:map1[v2+1]] = edge_CC[i];
+
+
+        for i in range(len(CH_ind)):
+            u1,u2 = edge_src[CH_ind[i]],edge_dst[CH_ind[i]];
+            frame = batch[u1];
+            v1 = u1-frame*natm;
+            v2 = u2-frame*natm;
+            Vmat[frame][map1[v1]:map1[v1+1], map1[v2]:map1[v2+1]] = edge_CH[i];
+        
+        Vmat = torch.stack([(V+V.T)/2 for V in Vmat]);
+        
+        return Vmat;
         
         
