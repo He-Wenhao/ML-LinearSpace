@@ -8,16 +8,32 @@ Created on Thu Aug 17 16:00:28 2023
 import torch;
 import json;
 import numpy as np;
-from pkgs.train import trainer;
+import matplotlib;
 from pkgs.dataframe import load_data;
 from pkgs.model import V_theta;
 from pkgs.deploy import estimator;
+import matplotlib.pyplot as plt;
+from pkgs.sample_minibatch import sampler;
+from pkgs.tomat import to_mat;
+
 
 device = 'cpu';
+
+molecule_list = ['methane','ethane','ethylene','acetylene'];
+
+data, labels = load_data(molecule_list, device, ind_list=range(500));
+sampler1 = sampler(data, labels, device);
+
 est = estimator(device);
-data, labels = load_data('Methane', device,
-                         ind_list = [0]);
+est.load('model_4molecules.pt')
 
-est.load('model.pt');
+batch_size = 500;
+for i in range(len(molecule_list)):
+    
+    minibatch, labels = sampler1.sample(batch_size=batch_size, i_molecule=i);
+    
+    Ehat, E = est.solve(minibatch,labels,
+                        save_filename=molecule_list[i]);        
 
-results = est.solve(data);
+est.plot(molecule_list)
+
