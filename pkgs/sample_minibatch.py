@@ -20,14 +20,14 @@ class sampler(object):
         self.max_radius = max_radius;
         self.min_radius = min_radius;
         self.irreps_sh = o3.Irreps.spherical_harmonics(lmax=2);
-        self.element_embedding = {'H':[0,1],'C':[1,0]};
+        self.element_embedding = {'H':[0,1],'O':[1,0]};
         
     def sample(self, batch_size, i_molecule):
         
         data = self.data[i_molecule];
         
         ind = [i for i in range(len(self.data[i_molecule]['pos']))];
-#        np.random.shuffle(ind);
+        np.random.shuffle(ind);
         ind = ind[:batch_size];
         natm = len(data['elements']);
         nframe = len(ind);
@@ -57,7 +57,7 @@ class sampler(object):
         HH_ind = torch.argwhere(f_in[edge_src][:,1]*f_in[edge_dst][:,1]).reshape(-1);
         CH_ind = torch.argwhere(f_in[edge_src][:,0]*f_in[edge_dst][:,1]).reshape(-1);
         
-        map1 = [5+9*(ele=='C') for ele in data['elements']];
+        map1 = [5+9*(ele=='O') for ele in data['elements']];
         map1 = [sum(map1[:i]) for i in range(len(map1)+1)];
         
         minibatch = {
@@ -79,7 +79,8 @@ class sampler(object):
             'batch': batch,
             'map1': map1,
             'natm': natm,
-            'h': self.labels[i_molecule]['h'][ind],
+            'h0': self.labels[i_molecule]['h0'][ind],
+            'h1': self.labels[i_molecule]['h1'][ind],
             'Ee': self.labels[i_molecule]['E'][ind]-self.labels[i_molecule]['E_nn'][ind],
             'ne': data['properties']['ne'],
             };

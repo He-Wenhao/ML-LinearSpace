@@ -19,13 +19,13 @@ from pkgs.tomat import to_mat;
 
 device = 'cpu';
 
-molecule_list = ['methane','ethane','ethylene','acetylene'];
+molecule_list = ['OH'];
 
-data, labels = load_data(molecule_list, device, ind_list=range(500));
+data, labels = load_data(molecule_list, device, ind_list=range(0,20));
 sampler1 = sampler(data, labels, device);
 
 est = estimator(device);
-est.load('model_4molecules.pt')
+est.load('model.pt')
 
 batch_size = 500;
 for i in range(len(molecule_list)):
