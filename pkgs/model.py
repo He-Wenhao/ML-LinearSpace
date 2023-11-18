@@ -4,8 +4,6 @@ from torch_scatter import scatter
 from e3nn import o3
 from e3nn import nn
 
-
-
 class V_theta(torch.nn.Module):
     
     def __init__(self, device, emb_neurons: int = 16) -> None:
@@ -35,19 +33,16 @@ class V_theta(torch.nn.Module):
         for f in self.Irreps_HH:
             for f1 in f:
                 out += f1+'+';
-        out = out+out;
         self.Irreps_HH = o3.Irreps(out[:-1]);
         out = "";
         for f in self.Irreps_CC:
             for f1 in f:
                 out += f1+'+';
-        out = out+out;
         self.Irreps_CC = o3.Irreps(out[:-1]);
         out = "";
         for f in self.Irreps_CH:
             for f1 in f:
                 out += f1+'+';
-        out = out+out;
         self.Irreps_CH = o3.Irreps(out[:-1]);
         
         self.irreps_sh = o3.Irreps.spherical_harmonics(lmax=2);
@@ -156,25 +151,12 @@ class V_theta(torch.nn.Module):
         edge_H = self.tpH(node_feature[edge_src], sh, self.fcH(emb));
         node_H = scatter(edge_H, edge_dst, dim=0, dim_size=num_nodes).div(num_neighbors**0.5);
         
-        def slice(input,part):
-            assert part in [0,1]
-            if part == 0:
-                return input[:,:int(input.shape[1])//2]
-            if part == 1:
-                return input[:,int(input.shape[1])//2:]
-            
-        V_raw0 = {'H': slice(node_H,0),
-                 'C': slice(node_C,0),
-                 'HH': slice(edge_HH,0),
-                 'CH': slice(edge_CH,0),
-                 'CC': slice(edge_CC,0)};
+        V_raw = {'H': node_H,
+                 'C': node_C,
+                 'HH': edge_HH,
+                 'CH': edge_CH,
+                 'CC': edge_CC};
         
-        V_raw1 = {'H': slice(node_H,1),
-                 'C': slice(node_C,1),
-                 'HH': slice(edge_HH,1),
-                 'CH': slice(edge_CH,1),
-                 'CC': slice(edge_CC,1)};
-        
-        return V_raw0, V_raw1;
+        return V_raw;
 
 
