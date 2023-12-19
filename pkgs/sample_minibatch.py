@@ -11,9 +11,9 @@ from torch_cluster import radius_graph;
 from e3nn import o3;
 
 class sampler(object):
-    
+
     def __init__(self, data_in, labels, device, min_radius: float = 0.5, max_radius: float = 2):
-        
+
         self.data = data_in;
         self.labels = labels;
         self.device = device;
@@ -21,18 +21,18 @@ class sampler(object):
         self.min_radius = min_radius;
         self.irreps_sh = o3.Irreps.spherical_harmonics(lmax=2);
         self.element_embedding = {'H':[0,1],'C':[1,0]};
-        
-    def sample(self, batch_size, i_molecule):
-        
+
+    def sample(self, batch_size, i_molecule, op_names=[]):
+
         data = self.data[i_molecule];
-        
+
         ind = [i for i in range(len(self.data[i_molecule]['pos']))];
 #        np.random.shuffle(ind);
         ind = ind[:batch_size];
         natm = len(data['elements']);
         nframe = len(ind);
         num_nodes = nframe*natm;
-        
+
         pos = data['pos'][ind].reshape([-1,3]);
         batch = torch.tensor([int(i//natm) for i in range(num_nodes)]).to(self.device);
         edge_src, edge_dst = radius_graph(x=pos, r=self.max_radius, batch=batch);
@@ -45,7 +45,7 @@ class sampler(object):
                                     x = edge_vec, 
                                     normalize=True, 
                                     normalization='component').to(self.device)
-        
+
         rnorm = edge_vec.norm(dim=1);
         crit1, crit2 = rnorm<self.max_radius, rnorm>self.min_radius;
         emb = (torch.cos(rnorm/self.max_radius*torch.pi)+1)/2; 
@@ -56,10 +56,10 @@ class sampler(object):
         CC_ind = torch.argwhere(f_in[edge_src][:,0]*f_in[edge_dst][:,0]).reshape(-1);
         HH_ind = torch.argwhere(f_in[edge_src][:,1]*f_in[edge_dst][:,1]).reshape(-1);
         CH_ind = torch.argwhere(f_in[edge_src][:,0]*f_in[edge_dst][:,1]).reshape(-1);
-        
+
         map1 = [5+9*(ele=='C') for ele in data['elements']];
         map1 = [sum(map1[:i]) for i in range(len(map1)+1)];
-        
+
         minibatch = {
                      'sh': sh,
                      'emb': emb,
@@ -72,7 +72,7 @@ class sampler(object):
                      'CH_ind': CH_ind,
                      'CC_ind': CC_ind
                      };
-        
+
         batch_labels = {
             'norbs': data['properties']['norbs'],
             'nframe': len(ind),
@@ -82,10 +82,10 @@ class sampler(object):
             'h': self.labels[i_molecule]['h'][ind],
             'Ee': self.labels[i_molecule]['E'][ind]-self.labels[i_molecule]['E_nn'][ind],
             'ne': data['properties']['ne'],
+            'norbs': data['properties']['norbs'],
             };
-        
+
+        for op_name in op_names:
+            batch_labels[op_name] = self.labels[i_molecule][op_name][ind]
+
         return minibatch, batch_labels;
-        
-        
-            
-            

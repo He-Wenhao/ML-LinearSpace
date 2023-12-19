@@ -7,6 +7,9 @@ Created on Thu Jul  6 11:44:30 2023
 
 import json;
 import torch;
+from scipy.interpolate import lagrange;
+import numpy as np;
+import scipy;
 
 class integrate():
 
@@ -15,214 +18,101 @@ class integrate():
         with open('script/orbitals.json','r') as file:
             self.orbs_elements = json.load(file);
         self.device = device;
-
-    def calc_psi(self, orb, crd, xx, yy, zz):
-
-        # This function calculate the basis wave functions on grid
-        # orbs is a dictionary containing N Gaussian function informations  
-        # 'c': N-dim weight list of Gaussian functions, 
-        # 'alpha': Nx3 list of x^a1 y^a2 z^a3 polynomial exponents
-        # 'zeta': N-dim exponential term e^(-zeta r^2);
-        # xx, yy, zz are Nx, Ny, Nz grid tensor referenced to the atom center.
-        # output psi on Nx x Ny x Nz PyTorch tensor.
+        self.zeta = {};
+        self.alpha = {};
+        self.c = {};
+        self.Ng = {};
+        self.Nb = {};
         
-        c = orb['c'];
-        alpha = orb['alpha'];
-        zeta = orb['zeta'];
-        nframe = len(crd);
-        nx,ny,nz = len(xx[0]), len(yy[0]),len(zz[0]);
-
-        dx = xx.reshape(nframe,nx)-crd[:,0].reshape(nframe,1);
-        dy = yy.reshape(nframe,ny)-crd[:,1].reshape(nframe,1);
-        dz = zz.reshape(nframe,nz)-crd[:,2].reshape(nframe,1);
-        psi = torch.zeros([nframe, nx, ny, nz]).to(self.device);
-        
-        for ii in range(len(c)):
-        
-            x_components = dx**alpha[ii][0]*torch.exp(-zeta[ii]*dx**2);
-            y_components = dy**alpha[ii][1]*torch.exp(-zeta[ii]*dy**2);
-            z_components = dz**alpha[ii][2]*torch.exp(-zeta[ii]*dz**2);
-            outer_product = torch.einsum('ui,uj,uk->uijk',[x_components,y_components,z_components]);
-            psi += c[ii]*outer_product;
-        
-        return psi;
-    
-    # to class, read document when initialize
-    
-    
-    def calc_S(self, pos, atm, grid):
-        
-        angstron2Bohr = 1.88973;
-        all_orbs = [];
-        pos = torch.tensor(pos).to(self.device)*angstron2Bohr;
-        map1 = [];
-        map_ind = 0;        
-        
-        for atom in atm[0]:
-            all_orbs += self.orbs_elements[atom];
-            if(atom=='H'):
-                map1 += [map_ind]*14;
-            else:
-                map1 += [map_ind]*30;
-            map_ind += 1;
-
-        ############ calculate all orbitals on grid (psi_all) #############
-
-        xx = torch.stack([torch.linspace(gr[0][0], gr[0][0]+gr[1][0]*59, 60) for gr in grid]).to(self.device);
-        yy = torch.stack([torch.linspace(gr[0][1], gr[0][1]+gr[1][1]*59, 60).to(self.device) for gr in grid]).to(self.device);
-        zz = torch.stack([torch.linspace(gr[0][2], gr[0][2]+gr[1][2]*59, 60).to(self.device) for gr in grid]).to(self.device);
-        norbs = len(all_orbs);
-        nbatch = len(pos);
-        psi_all = torch.zeros((norbs, nbatch, 60, 60, 60)).to(self.device);
-        
-        for iorb in range(norbs):
-
-            orb_tmp = all_orbs[iorb];
-            crd = pos[:,map1[iorb],:];
-            psi_all[iorb] = self.calc_psi(orb_tmp, crd, xx, yy,zz);
-        ########### calculate Sik ##########################################
-        
-        dV = (xx[:,1]-xx[:,0])*(yy[:,1]-yy[:,0])*(zz[:,1]-zz[:,0]); # volume element
-        Sik = torch.einsum('iulmn,kulmn,u->uik',[psi_all,psi_all, dV]);
-
-        return Sik;
-
-
-    def calc_N(self, pos, atm, nr, grid):
-        
-        angstron2Bohr = 1.88973;
-        all_orbs = [];
-        pos = torch.tensor(pos).to(self.device)*angstron2Bohr;
-        map1 = [];
-        map_ind = 0;        
-        
-        for atom in atm[0]:
-            all_orbs += self.orbs_elements[atom];
-            if(atom=='H'):
-                map1 += [map_ind]*14;
-            else:
-                map1 += [map_ind]*30;
-            map_ind += 1;
-
-        ############ calculate all orbitals on grid (psi_all) #############
-
-        xx = torch.stack([torch.linspace(gr[0][0], gr[0][0]+gr[1][0]*59, 60) for gr in grid]).to(self.device);
-        yy = torch.stack([torch.linspace(gr[0][1], gr[0][1]+gr[1][1]*59, 60).to(self.device) for gr in grid]).to(self.device);
-        zz = torch.stack([torch.linspace(gr[0][2], gr[0][2]+gr[1][2]*59, 60).to(self.device) for gr in grid]).to(self.device);
-        
-        norbs = len(all_orbs);
-        nbatch = len(pos);
-        psi_all = torch.zeros((norbs, nbatch, 60, 60, 60)).to(self.device);
-        
-        for iorb in range(norbs):
-
-            orb_tmp = all_orbs[iorb];
-            crd = pos[:,map1[iorb],:];
-            psi_all[iorb] = self.calc_psi(orb_tmp, crd, xx, yy,zz);
+        for key in self.orbs_elements:
+            self.zeta[key] = [];
+            self.alpha[key] = [];
+            self.c[key] = [];
+            self.Ng[key] = 0;
+            self.Nb[key] = 0;
             
-        ########### calculate Sik ##########################################
-
-        nr = torch.tensor(nr).to(self.device);
-        dV = (xx[:,1]-xx[:,0])*(yy[:,1]-yy[:,0])*(zz[:,1]-zz[:,0]); # volume element
-        Nik = torch.einsum('iulmn,ulmn,kulmn,u->uik',[psi_all,nr,psi_all, dV]);
+            for u in self.orbs_elements[key]:
+                self.zeta[key] += u['zeta'];
+                self.alpha[key] += u['alpha'];
+                self.c[key].append(u['c']);
+                self.Ng[key] += len(u['c']);
+                self.Nb[key] += 1;
         
-        return Nik;
+        xlist = np.linspace(-3,3,7);
+        matrix = [];
+        for i in range(7):
+            ylist = np.zeros(7);
+            ylist[i] = 1;
+            res = np.flip(lagrange(xlist, ylist).coef);
+            res = res.tolist()+[0]*(7-len(res));
+            matrix.append([res[2*n]*scipy.special.factorial2(max(2*n-1,0))/2**n*np.sqrt(np.pi) for n in range(4)]);
+        self.mat = torch.tensor(matrix, dtype=torch.float).to(self.device);
+                
+    def Mat(self, z1, z2, x1, x2, k1, k2, polynomial):
+        
+        polynomial = torch.tensor(polynomial,
+                                  dtype=torch.float)[None,None,None,:,None].to(self.device);
+        xc = (z1[:,:,:,None]*x1+z2[:,:,:,None]*x2)/(z1+z2)[:,:,:,None];
+        xc, r1, r2 = xc[:,:,:,:,None],(x1-xc)[:,:,:,:,None], (x2-xc)[:,:,:,:,None];
+        exponent_term = torch.exp(-z1*z2/(z1+z2)*torch.sum((x1-x2)**2, axis=3));
+        
+        x = torch.linspace(-3,3,7)[None,None,None,None,:].to(self.device);
+        integrant = (x+xc)**polynomial*(x-r1)**k1[:,:,:,:,None]*(x-r2)**k2[:,:,:,:,None];
+        integrant = torch.einsum('ijklm,mn->ijkln', [integrant, self.mat]);
+        
+        divided = (z1+z2)[:,:,:,None,None]**torch.tensor([1/2+i for i in range(4)],
+                                                         dtype=torch.float)[None,None,None,None,:].to(self.device);
+        integrant /= divided;
+        results = torch.sum(integrant, axis=4);
+        results = torch.prod(results, axis=3)*exponent_term;
+        
+        return results;
     
-    # to class, read document when initialize
-    def calc_F(self, data_in, c, ngrid = 20):
+    def calc_O(self, pos, atm, operator):
         
-        # N: number of atoms, M: number of basis, ne: number of occupied orbitals
-        # give pos: Nx3 tensor atomic coordinates and elements: N-dim species list ['C','H', ...]
-        # and the MxM tensor wave function vectors c from the K-S equation.
-        # This function outputs an ne x (M-ne) Pytorch tensor that output
-        # ci * (sum_j ci*F*cj) * ck for all (i,k) pairs
-        
-        ############ read orbital information into all_orbs ###############
+        polynomial = [operator.count('x'),
+                      operator.count('y'),
+                      operator.count('z')];
         
         angstron2Bohr = 1.88973;
-        all_orbs = [];
-        pos = data_in['pos']*angstron2Bohr;
-        map1 = [];
-        map_ind = 0;        
+        pos = pos.to(self.device)*angstron2Bohr;
+        pos[:,:,[1,2,0]] = pos[:,:,[0,1,2]];
+     
+        mass = {'H':1.00794, 'C':12.011};
+        ml = torch.tensor([mass[e1] for e1 in atm], dtype=torch.float).to(self.device);
+        center = torch.einsum('uij,i->uj',[pos,ml])/torch.sum(ml);
+        pos -= center[:,None,:];
         
-        for atom in data_in['elements']:
-            all_orbs += self.orbs_elements[atom];
-            if(atom=='H'):
-                map1 += [map_ind]*14;
-            else:
-                map1 += [map_ind]*30;
-            map_ind += 1;
+        zeta, alpha, c, x = [], [], [], [];
+        Nbasis, Ngaussian = 0,0;
+        for i in range(len(atm)):
+            atom = atm[i];
+            zeta += self.zeta[atom];
+            alpha += self.alpha[atom];
+            x.append(pos[:,i:i+1,:].repeat([1,len(self.zeta[atom]),1]));
                 
-        ############ calculate all orbitals on grid (psi_all) #############
-        norbs = len(all_orbs);
-        nbatch = data_in['properties']['nframe'];
-        ne = data_in['properties']['ne'];
-
-        crd_min, crd_max = torch.min(pos,axis=1)[0],torch.max(pos,axis=1)[0];
-
-        xx = torch.stack([torch.linspace(crd_min[i][0]-5, crd_max[i][0]+5, ngrid) for i in range(nbatch)]).to(self.device);
-        yy = torch.stack([torch.linspace(crd_min[i][1]-5, crd_max[i][1]+5, ngrid) for i in range(nbatch)]).to(self.device);
-        zz = torch.stack([torch.linspace(crd_min[i][2]-5, crd_max[i][2]+5, ngrid) for i in range(nbatch)]).to(self.device);
-
-        
-        psi_all = torch.zeros((norbs, nbatch, ngrid, ngrid, ngrid)).to(self.device);
-    
-        for iorb in range(norbs):
-
-            orb_tmp = all_orbs[iorb];
-            crd = pos[:,map1[iorb],:];
-            psi_all[iorb] = self.calc_psi(orb_tmp, crd, xx, yy,zz);
-        
-        ########### calculate Fik ##########################################
-        
-        dV = (xx[:,1]-xx[:,0])*(yy[:,1]-yy[:,0])*(zz[:,1]-zz[:,0]); # volume element
-
-        psi_c = torch.einsum('uij,iuklm->juklm',[c,psi_all]); # K-S eigen wave functions
-        
-        # implement ci * (sum_j ci*F*cj) * ck
-        Fm = torch.einsum('julmn,julmn->ulmn',[psi_c[:ne], psi_c[:ne]]);
-
-        Fik = torch.einsum('iuabc,uabc,kuabc,u->uik',[psi_c[:ne], Fm, psi_c[ne:],dV]);
-    
-        return 2*Fik; # the factor of 2 is from spin
-    
-    def calc_S_deploy(self, data_in, ngrid=100):
-        
-        angstron2Bohr = 1.88973;
-        all_orbs = [];
-        pos = data_in['pos'][:,:,[2,0,1]]*angstron2Bohr;
-        map1 = [];
-        map_ind = 0;        
-        
-        for atom in data_in['elements']:
-            all_orbs += self.orbs_elements[atom];
-            if(atom=='H'):
-                map1 += [map_ind]*14;
-            else:
-                map1 += [map_ind]*30;
-            map_ind += 1;
-                
-        ############ calculate all orbitals on grid (psi_all) #############
-        norbs = len(all_orbs);
-        nbatch = len(pos);
-        
-        crd_min, crd_max = torch.min(pos,axis=1)[0],torch.max(pos,axis=1)[0];
-        
-        xx = torch.stack([torch.linspace(crd_min[i][0]-5, crd_max[i][0]+5, ngrid) for i in range(nbatch)]).to(self.device);
-        yy = torch.stack([torch.linspace(crd_min[i][1]-5, crd_max[i][1]+5, ngrid) for i in range(nbatch)]).to(self.device);
-        zz = torch.stack([torch.linspace(crd_min[i][2]-5, crd_max[i][2]+5, ngrid) for i in range(nbatch)]).to(self.device);
-        
-        psi_all = torch.zeros((norbs, nbatch, ngrid, ngrid, ngrid)).to(self.device);
-        
-        for iorb in range(norbs):
+            c += self.c[atom];
+            Ngaussian += self.Ng[atom];
+            Nbasis += self.Nb[atom];
             
-            orb_tmp = all_orbs[iorb];
-            crd = pos[:,map1[iorb],:];
-            psi_all[iorb] = self.calc_psi(orb_tmp, crd, xx, yy,zz);
-        ########### calculate Sik ##########################################
+        x = torch.hstack(x).to(self.device);
+        zeta = torch.tensor(zeta, dtype=torch.float).to(self.device);
+        alpha = torch.tensor(alpha, dtype=torch.float).to(self.device);
+
+        z1, z2 = zeta[None,:,None], zeta[None,None,:];
+        k1, k2 = alpha[None,:,None,:], alpha[None,None,:,:];
+        x1, x2 = x[:,:,None,:], x[:,None,:,:];
         
-        dV = (xx[:,1]-xx[:,0])*(yy[:,1]-yy[:,0])*(zz[:,1]-zz[:,0]); # volume element
-        Sik = torch.einsum('iulmn,kulmn,u->uik',[psi_all,psi_all, dV]);
+        Omat = self.Mat(z1, z2, x1, x2, k1, k2, polynomial);
+        cmat = torch.zeros([Nbasis,Ngaussian], dtype=torch.float).to(self.device);
         
-        return Sik;
-    
+        c_index = 0;
+        for i in range(len(c)):
+            length = len(c[i]);
+            cmat[i, c_index:c_index+length] = torch.tensor(c[i], dtype=torch.float).to(self.device);
+            c_index += length;
+            
+        Omat = torch.einsum('ki,uij,lj->ukl',[cmat, Omat, cmat]);
+        
+        return Omat.tolist();
+        

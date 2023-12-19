@@ -6,7 +6,7 @@ from e3nn import nn
 
 class V_theta(torch.nn.Module):
     
-    def __init__(self, device, emb_neurons: int = 16) -> None:
+    def __init__(self, device, emb_neurons: int = 16, scaling=0.2) -> None:
         super().__init__()
         
         # Initialize a Equivariance graph convolutional neural network
@@ -14,7 +14,7 @@ class V_theta(torch.nn.Module):
         # num_basis is the number of basis for edge feature embedding
         
         self.device = device;
-        
+        self.scaling = scaling;
         self.Irreps_HH = [["4x0e","2x1o"],
                          ["2x1o","1x0e+1x1e+1x2e"]];
         
@@ -48,20 +48,40 @@ class V_theta(torch.nn.Module):
         self.irreps_sh = o3.Irreps.spherical_harmonics(lmax=2);
         self.irreps_input = o3.Irreps("2x0e");
         irreps_mid1 = o3.Irreps("8x0e + 8x1o + 8x2e");
-        irreps_mid2 = o3.Irreps("8x0e + 8x0o + 8x1e + 8x1o + 8x2e + 8x2o");
-
+        irreps_mid2 = o3.Irreps("8x0e + 8x0o + 8x1e + 8x1o + 4x2e + 4x2o");
+        
+        self.linear1 = o3.Linear(self.irreps_input,
+                                 self.irreps_input);
+        self.activation1 = nn.Activation(self.irreps_input, [torch.tanh]);
+        
         self.tp1 = o3.FullyConnectedTensorProduct(
             irreps_in1=self.irreps_input,
             irreps_in2=self.irreps_sh,
             irreps_out=irreps_mid1,
             shared_weights=False
         )
+        
+        self.activation2 = nn.Activation(irreps_mid1, [torch.tanh,None,None]);
+        self.linear2 = o3.Linear(irreps_mid1,
+                                 irreps_mid1);
+        
         self.tp2 = o3.FullyConnectedTensorProduct(
             irreps_in1=irreps_mid1,
             irreps_in2=self.irreps_sh,
             irreps_out=irreps_mid2,
             shared_weights=False
         )
+        
+        self.activation3 = nn.Activation(irreps_mid2, [torch.tanh]*2+[None]*4);
+        self.linear3 = o3.Linear(irreps_mid2,
+                                 irreps_mid2);
+        
+        self.linearCC = o3.Linear(irreps_mid2,
+                                  self.Irreps_CC);
+        self.linearHH = o3.Linear(irreps_mid2,
+                                  self.Irreps_HH);
+        self.linearCH = o3.Linear(irreps_mid2,
+                                  self.Irreps_CH);
         
         self.bond_feature = o3.FullyConnectedTensorProduct(
             irreps_in1=irreps_mid2,
@@ -70,50 +90,15 @@ class V_theta(torch.nn.Module):
             shared_weights=False
         )
         
-        self.tpHH = o3.FullyConnectedTensorProduct(
-            irreps_in1=irreps_mid2,
-            irreps_in2=self.irreps_sh,
-            irreps_out=self.Irreps_HH,
-            shared_weights=False
-        )
-        
-        self.tpCC = o3.FullyConnectedTensorProduct(
-            irreps_in1=irreps_mid2,
-            irreps_in2=self.irreps_sh,
-            irreps_out=self.Irreps_CC,
-            shared_weights=False
-        )
-        
-        self.tpCH = o3.FullyConnectedTensorProduct(
-            irreps_in1=irreps_mid2,
-            irreps_in2=self.irreps_sh,
-            irreps_out=self.Irreps_CH,
-            shared_weights=False
-        )
-        
-        self.tpC = o3.FullyConnectedTensorProduct(
-            irreps_in1=irreps_mid2,
-            irreps_in2=self.irreps_sh,
-            irreps_out=self.Irreps_CC,
-            shared_weights=False
-        )
-        self.tpH = o3.FullyConnectedTensorProduct(
-            irreps_in1=irreps_mid2,
-            irreps_in2=self.irreps_sh,
-            irreps_out=self.Irreps_HH,
-            shared_weights=False
-        )
+        self.linearC = o3.Linear(irreps_mid2,
+                                 self.Irreps_CC);
+        self.linearH = o3.Linear(irreps_mid2,
+                                 self.Irreps_HH);
         
         self.fc1 = nn.FullyConnectedNet([1, emb_neurons,emb_neurons, self.tp1.weight_numel], torch.relu);
         self.fc2 = nn.FullyConnectedNet([1, emb_neurons,emb_neurons, self.tp2.weight_numel], torch.relu);
         self.fc_bond = nn.FullyConnectedNet([1, emb_neurons,emb_neurons, self.bond_feature.weight_numel], torch.relu);
 
-        self.fcHH = nn.FullyConnectedNet([1, emb_neurons,emb_neurons,emb_neurons, self.tpHH.weight_numel], torch.relu);
-        self.fcCC = nn.FullyConnectedNet([1, emb_neurons,emb_neurons,emb_neurons, self.tpCC.weight_numel], torch.relu);
-        self.fcCH = nn.FullyConnectedNet([1, emb_neurons,emb_neurons,emb_neurons, self.tpCH.weight_numel], torch.relu);
-        self.fcC = nn.FullyConnectedNet([1, emb_neurons,emb_neurons,emb_neurons, self.tpC.weight_numel], torch.relu);
-        self.fcH = nn.FullyConnectedNet([1, emb_neurons,emb_neurons,emb_neurons, self.tpH.weight_numel], torch.relu);
-        
     def forward(self, minibatch) -> torch.Tensor:
         
         # Forward function of the neural network model
@@ -133,29 +118,36 @@ class V_theta(torch.nn.Module):
         HH_ind = minibatch['HH_ind'];
         CC_ind = minibatch['CC_ind'];
         CH_ind = minibatch['CH_ind'];
-        edge_feature = self.tp1(f_in[edge_src], sh, self.fc1(emb));
+        
+        node_feature = self.linear1(f_in);
+        node_feature = self.activation1(node_feature);
+        edge_feature = self.tp1(node_feature[edge_src], sh, self.fc1(emb));
         node_feature = scatter(edge_feature, edge_dst, dim=0, dim_size=num_nodes).div(num_neighbors**0.5);
+        node_feature = self.activation2(node_feature);
+        node_feature = self.linear2(node_feature);
+        node_feature = self.activation2(node_feature);
         edge_feature = self.tp2(node_feature[edge_src], sh, self.fc2(emb));
         node_feature = scatter(edge_feature, edge_dst, dim=0, dim_size=num_nodes).div(num_neighbors**0.5);
+        node_feature = self.activation3(node_feature);
+        node_feature = self.linear3(node_feature);
+        node_feature = self.activation3(node_feature);
         
         HH_feature = self.bond_feature(node_feature[edge_src[HH_ind]], node_feature[edge_dst[HH_ind]],self.fc_bond(emb[HH_ind]));
         CC_feature = self.bond_feature(node_feature[edge_src[CC_ind]], node_feature[edge_dst[CC_ind]],self.fc_bond(emb[CC_ind]));
         CH_feature = self.bond_feature(node_feature[edge_src[CH_ind]], node_feature[edge_dst[CH_ind]],self.fc_bond(emb[CH_ind]));
         
-        edge_HH = self.tpHH(HH_feature, sh[HH_ind], self.fcHH(emb[HH_ind]));
-        edge_CC = self.tpCC(CC_feature, sh[CC_ind], self.fcCC(emb[CC_ind]));
-        edge_CH = self.tpCH(CH_feature, sh[CH_ind], self.fcCH(emb[CH_ind]));
+        edge_HH = self.linearHH(self.activation3(HH_feature));
+        edge_CC = self.linearCC(self.activation3(CC_feature));
+        edge_CH = self.linearCH(self.activation3(CH_feature));
         
-        edge_C = self.tpC(node_feature[edge_src], sh, self.fcC(emb));
-        node_C = scatter(edge_C, edge_dst, dim=0, dim_size=num_nodes).div(num_neighbors**0.5);
-        edge_H = self.tpH(node_feature[edge_src], sh, self.fcH(emb));
-        node_H = scatter(edge_H, edge_dst, dim=0, dim_size=num_nodes).div(num_neighbors**0.5);
-        
-        V_raw = {'H': node_H,
-                 'C': node_C,
-                 'HH': edge_HH,
-                 'CH': edge_CH,
-                 'CC': edge_CC};
+        node_C = self.linearC(node_feature);
+        node_H = self.linearH(node_feature);
+
+        V_raw = {'H': node_H * self.scaling,
+                 'C': node_C * self.scaling,
+                 'HH': edge_HH * self.scaling,
+                 'CH': edge_CH * self.scaling,
+                 'CC': edge_CC * self.scaling};
         
         return V_raw;
 
