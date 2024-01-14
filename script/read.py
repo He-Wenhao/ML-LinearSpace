@@ -2,7 +2,6 @@ import os;
 import numpy as np;
 import json;
 from ase.io.cube import read_cube_data;
-import torch;
 import scipy;
 
 Nframe = 500;
@@ -25,11 +24,11 @@ name = route[u+1:-1];
 
 res = os.popen("grep 'Number of Electrons' pvdz/0/log").readline();
 ne = float(res.split()[-1]);
-print(ne)
+print('N electrons:' + str(ne));
 
 os.chdir(route+'pvtz/');
 for i in range(Nframe):
-    print(i);
+    print('reading basic information: '+str(i));
     res = os.popen("grep 'E(CCSD(T))' "+str(i)+'/log').readline();
     if(len(res)!=0):
         E1 = float(res.split()[-1][:-1]);
@@ -93,7 +92,7 @@ slist = [];
 os.chdir(route);
 
 for i in range(Nframe):
-    print(i)
+    print('reading matrix information: '+str(i));
     with open('pvdz/' + str(i)+'/log', 'r') as file:
         output =  file.readlines();
         u =  0;
@@ -118,18 +117,110 @@ for i in range(Nframe):
             slist.append(S.tolist());
             mlist.append(h.tolist());
         except:
+            raise
             slist.append(False);
             mlist.append(False);
             print('convergence failure '+str(i));
-#integrator = integrate('cpu');
-#Nik = [];
-Sik = [];
-
-#for i in range(int(Nframe//10)):
-#    Nik += integrator.calc_N(posl[10*i:10*i+10],atm[10*i:10*i+10],nr[10*i:10*i+10],grid[10*i:10*i+10]).tolist();
 
 output = {'coordinates':posl, 'HF': E_HF, 'elements':atm, 'S':slist, 'h':mlist, 'energy':Elist, 'Enn':E_nn};
 
 with open(name+'_data.json','w') as file:
     json.dump(output, file);
+
+
+pos = -2;
+while(route[pos]!='/'):
+    pos -= 1;
+name = route[pos+1:-1];
+try:
+    with open(route+name+'_data.json','r') as file:
+        data = json.load(file);
+except:
+    data = {};
+
+OPS = ['x', 'y', 'z', 'xx', 'yy', 'zz', 'xy', 'yz', 'xz'];
+obs_dic = {key:[] for key in OPS};
+obs_dic['atomic_charge'] = [];
+obs_dic['bond_order'] = [];
+obs_dic['Ee'] = [];
+obs_dic['T']  = [];
+natom = len(data['elements'][0]);
+
+for i in range(500):
+    
+    print('reading observables: '+str(i));
+    try:
+        dipole = os.popen("grep -A 4 'Electronic Contribution' "+route+'pvtz/'+str(i)+'/run_property.txt');
+        dipole = [-float(u[:-1].split()[-1]) for u in dipole.readlines()[-3:]];
+        
+        obs_dic['x'].append(dipole[0]);
+        obs_dic['y'].append(dipole[1]);
+        obs_dic['z'].append(dipole[2]);
+        
+        quadrupole = os.popen("grep -A 4 'Electronic part' "+route+'pvtz/'+str(i)+'/run_property.txt');
+        quadrupole = [[-float(v) for v in u[:-1].split()[1:]] for u in quadrupole.readlines()[-3:]];
+        
+        obs_dic['xx'].append(quadrupole[0][0]);
+        obs_dic['yy'].append(quadrupole[1][1]);
+        obs_dic['zz'].append(quadrupole[2][2]);
+        obs_dic['xy'].append(quadrupole[0][1]);
+        obs_dic['yz'].append(quadrupole[1][2]);
+        obs_dic['xz'].append(quadrupole[0][2]);
+        
+        command = "grep -A "+str(natom+1)+" 'MULLIKEN ATOMIC CHARGE' ";
+        atomicCharge = os.popen(command +route+'pvtz/'+str(i)+'/log').readlines()[-natom:];
+        atomicCharge = [float(u[:-1].split()[-1]) for u in atomicCharge];
+        obs_dic['atomic_charge'].append(atomicCharge);
+        
+        command = "grep -A "+str(20)+" 'Mayer bond orders' ";
+        bond_data = os.popen(command +route+'pvtz/'+str(i)+'/log').readlines();
+        i_ind = -1;
+        while('Mayer bond orders' not in bond_data[i_ind]):
+            i_ind -= 1;
+        i_ind += 1;
+        bond_order = [];
+        while('B' in bond_data[i_ind]):
+            u = bond_data[i_ind][:-1].split();
+            j_ind = 0;
+            while(7*j_ind+7<=len(u)):
+                bond_order.append([int(u[7*j_ind+1][:-2]),
+                                   int(u[7*j_ind+3][:-2]),
+                                   float(u[7*j_ind+6])
+                                   ])
+                j_ind += 1;
+            i_ind += 1;
+            
+        obs_dic['bond_order'].append(bond_order);
+        
+        dp = os.popen("grep -A 7 'ABSORPTION SPECTRUM' "+route+'/eom/'+str(i)+'/log').readlines();
+        dp = [[float(v) for v in u.split()] for u in dp[-3:]];
+        obs_dic['Ee'].append([u[1] for u in dp]);
+        obs_dic['T'].append([[u[5],u[6],u[7]] for u in dp]);
+        
+        dp = os.popen("grep -A 3 'The raw cartesian tensor' "+route+"polar/"+str(i)+"/log").readlines();
+        dp = [[float(v) for v in u.split()] for u in dp[-3:]];
+        obs_dic['alpha'].append(dp);
+
+    except:
+        
+        for key in obs_dic:
+            obs_dic[key].append(False);
+
+for key in obs_dic:
+    data[key] = obs_dic[key];
+
+for i in range(len(data['energy'])):
+    j = len(data['energy']) - i - 1;
+    if(data['S'][j]==False):
+        for key in data:
+            del data[key][j];
+        print('removing convergence failure: '+str(j));
+    
+    elif(data['energy'][j]==False):
+        for key in data:
+            del data[key][j];
+        print('removing convergence failure: '+str(j));
+
+with open(route+name+'_obs_data.json','w') as file:
+    json.dump(data, file);
 
