@@ -19,30 +19,39 @@ def example(rank, world_size):
     
     OPS = {'V':0.1,'E':1,
            'x':0.1, 'y':0.1, 'z':0.1,
-           'xx':0.05, 'yy':0.05, 'zz':0.05,
-           'xy':0.1, 'yz':0.1, 'xz':0.1}
-
-    batch_size = 500;
+           'xx':0.1, 'yy':0.1, 'zz':0.1,
+           'xy':0.1, 'yz':0.1, 'xz':0.1,
+           'atomic_charge': 0.1, 'E_gap':0.1,
+           'bond_order':0.1};
+    
+    batch_size = 495;
     steps_per_epoch = 1;
-    N_epoch = 1000;
+    N_epoch = 2000;
     lr_init = 1E-2;
     lr_final = 1E-3;
-    lr_decay_steps = 50;
+    lr_decay_steps = 400;
+    scaling = 0.2;
+    Nsave = 200;
     
-    molecule_list = [['methane','cyclopropane'],['ethane','propyne'],
-                     ['propane','acetylene'],['ethylene','propylene']];
+    molecule_list = [['CH4' ,'C3H4', 'C4H6'],
+                     ['C2H2', 'C3H6','C4H8'],
+                     ['C2H4', 'C3H8','C5H8'],
+                     ['C2H6','C4H6', 'C5H10']];
 
-    molecule_list = [['methane'],['acetylene']];
-
-    operators_except_EV = [key for key in list(OPS.keys()) if key!='E' and key!='V'];
+    operators_electric = [key for key in list(OPS.keys()) \
+                          if key in ['x','y','z','xx','yy',
+                                     'zz','xy','xz','yz']];
+        
     data, labels, obs_mats = load_data(molecule_list[rank], rank, 
                                        ind_list=range(batch_size), 
-                                       op_names=operators_except_EV);
+                                       op_names=operators_electric);
 
     train1 = trainer_ddp(rank, data, labels, lr=lr_init,
                          filename=str(rank)+'_model.pt',
-                         op_matrices=obs_mats);
-    
+                         op_matrices=obs_mats, scaling=scaling);
+    if(os.path.exists('0_model.pt')):
+        train1.load('0_model.pt');
+
     scheduler = StepLR(train1.optim, step_size=lr_decay_steps,
                        gamma=(lr_final/lr_init)**(lr_decay_steps/N_epoch));
     
@@ -63,12 +72,15 @@ def example(rank, world_size):
         scheduler.step();
         with open(str(rank)+'.txt','a') as file:
             file.write(str(i)+'\t')
-            for i in range(len(loss)):
-                file.write(str(loss[i])+'\t');
+            for j in range(len(loss)):
+                file.write(str(loss[j])+'\t');
             file.write('\n');
-        
+        if(i%Nsave == 0 and i>0):
+            train1.save(str(i)+'_model.pt');
+            print('saved model at epoch '+str(i));
+
 def main():
-    world_size = 2;
+    world_size = 4;
     mp.spawn(example,
         args=(world_size,),
         nprocs=world_size,
