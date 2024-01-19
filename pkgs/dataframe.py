@@ -10,11 +10,14 @@ import json;
 import torch;
 import scipy;
 
-def load_data(molecules, device, load_obs_mat = True, ind_list = [], op_names = []):
+def load_data(molecules, device, load_obs_mat = True, 
+              ind_list = [], op_names = []):
 
     data_in = [];
     labels = [];
     obs_mats = [];
+    
+    cm_inverse_to_hartree = 4.55633528*1E-6;
     
     for molecule in molecules:
         with open('data/'+molecule+'_data.json', 'r') as file:
@@ -26,7 +29,9 @@ def load_data(molecules, device, load_obs_mat = True, ind_list = [], op_names = 
             pos = torch.tensor(data['coordinates']).to(device);
             pos[:,:,[0,1,2]] = pos[:,:,[1,2,0]];
             elements = data['elements'][0];
-
+            nuclearCharge = [1+5*(ele=='C') for ele in elements];
+            nuclearCharge = torch.tensor(nuclearCharge, dtype=torch.float).to(device);
+            
             ne = int(round(sum([1+5*(ele=='C') for ele in elements])/2));
             norbs = int(round(sum([5+9*(ele=='C') for ele in elements])));
             nframe = len(pos);
@@ -38,11 +43,25 @@ def load_data(molecules, device, load_obs_mat = True, ind_list = [], op_names = 
             S_mhalf = [scipy.linalg.fractional_matrix_power(si, (-1/2)).tolist() for si in data['S']]
             S_mhalf = torch.tensor(S_mhalf).to(device);
             h = torch.matmul(torch.matmul(S_mhalf, h),S_mhalf);
-
+            
+            B_labels = torch.zeros([nframe, len(elements), 
+                                    len(elements)]).to(device);
+            for u in range(nframe):
+                for dp in data['bond_order'][u]:
+                    B_labels[u, dp[0], dp[1]] = dp[2];
+                    B_labels[u, dp[1], dp[0]] = dp[2];
+            
             label = {'S': torch.tensor(data['S']).to(device),
-                      'h': h,
-                      'E': torch.tensor(data['energy']).to(device),
-                      'E_nn':torch.tensor(data['Enn']).to(device)}
+                     'Smhalf': S_mhalf,
+                     'h': h,
+                     'E': torch.tensor(data['energy']).to(device),
+                     'E_nn':torch.tensor(data['Enn']).to(device),
+                     'atomic_charge': - torch.tensor(data['atomic_charge']).to(device) + \
+                          nuclearCharge[None,:],
+                     'E_gap': cm_inverse_to_hartree * \
+                         torch.tensor([u[0] for u in data['Ee']]).to(device),
+                     'B':B_labels};
+            
             for op_name in op_names:
                 label[op_name] = torch.tensor(data[op_name]).to(device)
             labels.append(label);
@@ -58,10 +77,13 @@ def load_data(molecules, device, load_obs_mat = True, ind_list = [], op_names = 
                                                                 for op in op_names})
                 
         else:
+            
             pos = torch.tensor(data['coordinates'])[ind_list].to(device);
             pos[:,:,[0,1,2]] = pos[:,:,[1,2,0]];
             elements = data['elements'][0];
-
+            nuclearCharge = [1+5*(ele=='C') for ele in elements];
+            nuclearCharge = torch.tensor(nuclearCharge, dtype=torch.float).to(device);
+            
             ne = int(round(sum([1+5*(ele=='C') for ele in elements])/2));
             norbs = int(round(sum([5+9*(ele=='C') for ele in elements])));
             nframe = len(pos);
@@ -73,11 +95,25 @@ def load_data(molecules, device, load_obs_mat = True, ind_list = [], op_names = 
             S_mhalf = [scipy.linalg.fractional_matrix_power(data['S'][si], (-1/2)).tolist() for si in ind_list]
             S_mhalf = torch.tensor(S_mhalf).to(device);
             h = torch.matmul(torch.matmul(S_mhalf, h),S_mhalf);
-
+            
+            B_labels = torch.zeros([nframe, len(elements), 
+                                    len(elements)]).to(device);
+            for u in range(nframe):
+                for dp in data['bond_order'][ind_list[u]]:
+                    B_labels[u, dp[0], dp[1]] = dp[2];
+                    B_labels[u, dp[1], dp[0]] = dp[2];
+                    
             label = {'S': torch.tensor(data['S'])[ind_list].to(device),
-                      'h': h,
-                      'E': torch.tensor(data['energy'])[ind_list].to(device),
-                      'E_nn':torch.tensor(data['Enn'])[ind_list].to(device)}
+                     'Smhalf': S_mhalf,
+                     'h': h,
+                     'E': torch.tensor(data['energy'])[ind_list].to(device),
+                     'E_nn':torch.tensor(data['Enn'])[ind_list].to(device),
+                     'atomic_charge': -torch.tensor(data['atomic_charge'])[ind_list].to(device) + \
+                          nuclearCharge[None,:],
+                     'E_gap': cm_inverse_to_hartree * \
+                          torch.tensor([u[0] for u in data['Ee']])[ind_list].to(device),
+                     'B': B_labels};
+                
             for op_name in op_names:
                 label[op_name] = torch.tensor(data[op_name])[ind_list].to(device)
             labels.append(label);

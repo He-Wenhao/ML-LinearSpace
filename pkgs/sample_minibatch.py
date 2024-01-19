@@ -82,7 +82,9 @@ class sampler(object):
             'h': self.labels[i_molecule]['h'][ind],
             'Ee': self.labels[i_molecule]['E'][ind]-self.labels[i_molecule]['E_nn'][ind],
             'ne': data['properties']['ne'],
-            'norbs': data['properties']['norbs'],
+            'atomic_charge': self.labels[i_molecule]['atomic_charge'][ind],
+            'E_gap': self.labels[i_molecule]['E_gap'][ind],
+            'B': self.labels[i_molecule]['B'][ind]
             };
 
         for op_name in op_names:
