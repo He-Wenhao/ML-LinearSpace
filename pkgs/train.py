@@ -29,7 +29,6 @@ class trainer():
         self.lr = lr
         self.model = V_theta(device).to(device)
         self.optim = torch.optim.Adam(self.model.parameters(), lr=lr)
-        self.integrator = integrate(device)
         self.filename = filename;
         self.sampler = sampler(data_in, labels, device);
         self.n_molecules = len(data_in);
@@ -93,7 +92,7 @@ class trainer():
 
                 E = labels['Ee'];  # ccsdt total energy
 
-                V_raw = self.model(minibatch);
+                V_raw, Eg_params = self.model(minibatch);
 
                 V = self.transformer.raw_to_mat(V_raw,minibatch,labels)*self.scaling;
                 
@@ -125,7 +124,7 @@ class trainer():
                     elif(op_name == 'E_gap'):
                         
                         Egap = labels['E_gap'];
-                        Lgap_grad, Lgap_out = loss_calculator.Eg_loss(Egap);
+                        Lgap_grad, Lgap_out = loss_calculator.Eg_loss(Egap, Eg_params);
                         
                         L_grads[op_name] = Lgap_grad;
                         L_ave[i] += Lgap_out;
@@ -138,6 +137,17 @@ class trainer():
                         L_grads[op_name] = LB;
                         L_ave[i] += LB_out;
                     
+                    elif(op_name == 'alpha'):
+                        
+                        alpha = labels['alpha'];
+                        r_mats = torch.stack([self.op_matrices[i_m]['x'],
+                                                self.op_matrices[i_m]['y'],
+                                                self.op_matrices[i_m]['z']]);
+                        Lalpha_grad, Lalpha_out = loss_calculator.polar_loss(alpha, r_mats);
+
+                        L_grads[op_name] = Lalpha_grad;
+                        L_ave[i] += Lalpha_out;
+
                     else:
                         
                         O = labels[op_name]
@@ -175,7 +185,6 @@ class trainer_ddp():
         self.lr = lr
         self.model = DDP(V_theta(device).to(device), device_ids=[device]);
         self.optim = torch.optim.Adam(self.model.parameters(), lr=lr)
-        self.integrator = integrate(device)
         self.loss = torch.nn.MSELoss();
         self.filename = filename;
         self.sampler = sampler(data_in, labels, device);
@@ -217,6 +226,10 @@ class trainer_ddp():
                     del res[key];
                 self.model.load_state_dict(res);
 
+    def save(self, filename):
+        
+        torch.save(self.model.state_dict(), filename);
+
     def train(self, steps=10, batch_size = 50,
               op_names=[]) -> float:
 
@@ -257,7 +270,7 @@ class trainer_ddp():
 
                 E = labels['Ee'];  # ccsdt total energy
 
-                V_raw = self.model(minibatch);
+                V_raw, Eg_params = self.model(minibatch);
 
                 V = self.transformer.raw_to_mat(V_raw,minibatch,labels)*self.scaling;
                 
@@ -289,7 +302,7 @@ class trainer_ddp():
                     elif(op_name == 'E_gap'):
                         
                         Egap = labels['E_gap'];
-                        Lgap_grad, Lgap_out = loss_calculator.Eg_loss(Egap);
+                        Lgap_grad, Lgap_out = loss_calculator.Eg_loss(Egap, Eg_params);
                         
                         L_grads[op_name] = Lgap_grad;
                         L_ave[i] += Lgap_out;
@@ -302,6 +315,17 @@ class trainer_ddp():
                         L_grads[op_name] = LB;
                         L_ave[i] += LB_out;
                     
+                    elif(op_name == 'alpha'):
+                        
+                        alpha = labels['alpha'];
+                        r_mats = torch.stack([self.op_matrices[i_m]['x'],
+                                                self.op_matrices[i_m]['y'],
+                                                self.op_matrices[i_m]['z']]);
+                        Lalpha_grad, Lalpha_out = loss_calculator.polar_loss(alpha, r_mats);
+
+                        L_grads[op_name] = Lalpha_grad;
+                        L_ave[i] += Lalpha_out;
+                        
                     else:
                         
                         O = labels[op_name]
@@ -317,8 +341,8 @@ class trainer_ddp():
 
             self.optim.step()  # implement gradient descend
 
-
-        torch.save(self.model.state_dict(), self.filename);
+        if(self.device==0):
+            torch.save(self.model.state_dict(), self.filename);
 
         return L_ave/steps/self.n_molecules;
 

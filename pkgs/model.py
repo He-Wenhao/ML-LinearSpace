@@ -98,6 +98,7 @@ class V_theta(torch.nn.Module):
         self.fc1 = nn.FullyConnectedNet([1, emb_neurons,emb_neurons, self.tp1.weight_numel], torch.relu);
         self.fc2 = nn.FullyConnectedNet([1, emb_neurons,emb_neurons, self.tp2.weight_numel], torch.relu);
         self.fc_bond = nn.FullyConnectedNet([1, emb_neurons,emb_neurons, self.bond_feature.weight_numel], torch.relu);
+        self.Eg_params = torch.nn.Parameter(torch.tensor([0., 1.]));
 
     def forward(self, minibatch) -> torch.Tensor:
         
@@ -149,6 +150,6 @@ class V_theta(torch.nn.Module):
                  'CH': edge_CH * self.scaling,
                  'CC': edge_CC * self.scaling};
         
-        return V_raw;
+        return V_raw, self.Eg_params;
 
 

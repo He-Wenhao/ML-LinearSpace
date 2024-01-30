@@ -10,7 +10,7 @@ import json;
 import torch;
 import scipy;
 
-def load_data(molecules, device, load_obs_mat = True, 
+def load_data(molecules, device, path = 'data', load_obs_mat = True, 
               ind_list = [], op_names = []):
 
     data_in = [];
@@ -20,7 +20,7 @@ def load_data(molecules, device, load_obs_mat = True,
     cm_inverse_to_hartree = 4.55633528*1E-6;
     
     for molecule in molecules:
-        with open('data/'+molecule+'_data.json', 'r') as file:
+        with open(path+'/'+molecule+'_data.json', 'r') as file:
 
             data = json.load(file);
 
@@ -60,14 +60,15 @@ def load_data(molecules, device, load_obs_mat = True,
                           nuclearCharge[None,:],
                      'E_gap': cm_inverse_to_hartree * \
                          torch.tensor([u[0] for u in data['Ee']]).to(device),
-                     'B':B_labels};
+                     'B': B_labels,
+                     'alpha': torch.tensor(data['alpha']).to(device)};
             
             for op_name in op_names:
                 label[op_name] = torch.tensor(data[op_name]).to(device)
             labels.append(label);
             
             if(load_obs_mat):
-                with open('data/'+molecule+'_obs_mat.json', 'r') as file:
+                with open(path + '/'+molecule+'_obs_mat.json', 'r') as file:
                     data_obs = json.load(file);
     
                 if op_names is None:
@@ -112,14 +113,15 @@ def load_data(molecules, device, load_obs_mat = True,
                           nuclearCharge[None,:],
                      'E_gap': cm_inverse_to_hartree * \
                           torch.tensor([u[0] for u in data['Ee']])[ind_list].to(device),
-                     'B': B_labels};
+                     'B': B_labels,
+                     'alpha': torch.tensor(data['alpha'])[ind_list].to(device)};
                 
             for op_name in op_names:
                 label[op_name] = torch.tensor(data[op_name])[ind_list].to(device)
             labels.append(label);
             
             if(load_obs_mat):
-                with open('data/'+molecule+'_obs_mat.json', 'r') as file:
+                with open(path+'/'+molecule+'_obs_mat.json', 'r') as file:
                     data_obs = json.load(file);                  
     
                 if op_names is None:

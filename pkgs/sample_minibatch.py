@@ -84,7 +84,8 @@ class sampler(object):
             'ne': data['properties']['ne'],
             'atomic_charge': self.labels[i_molecule]['atomic_charge'][ind],
             'E_gap': self.labels[i_molecule]['E_gap'][ind],
-            'B': self.labels[i_molecule]['B'][ind]
+            'B': self.labels[i_molecule]['B'][ind],
+            'alpha': self.labels[i_molecule]['alpha'][ind]
             };
 
         for op_name in op_names:
