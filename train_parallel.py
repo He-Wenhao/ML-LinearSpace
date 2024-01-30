@@ -11,6 +11,7 @@ from torch.optim.lr_scheduler import StepLR
 import os;
 
 def example(rank, world_size):
+
     # create default process group
     os.environ['MASTER_ADDR'] = 'localhost'
     os.environ['MASTER_PORT'] = '12355'
@@ -18,31 +19,33 @@ def example(rank, world_size):
     # create local model
     
     OPS = {'V':0.1,'E':1,
-           'x':0.1, 'y':0.1, 'z':0.1,
-           'xx':0.1, 'yy':0.1, 'zz':0.1,
-           'xy':0.1, 'yz':0.1, 'xz':0.1,
-           'atomic_charge': 0.1, 'E_gap':0.1,
-           'bond_order':0.1};
+       'x':0.1, 'y':0.1, 'z':0.1,
+       'xx':0.1, 'yy':0.1, 'zz':0.1,
+       'xy':0.1, 'yz':0.1, 'xz':0.1,
+       'atomic_charge': 0.1, 'E_gap':0.1,
+       'bond_order':0.1};
     
-    batch_size = 495;
+    batch_size = 490;
     steps_per_epoch = 1;
-    N_epoch = 2000;
-    lr_init = 1E-2;
+    N_epoch = 1801;
+    lr_init = 1E-3;
     lr_final = 1E-3;
-    lr_decay_steps = 400;
+    lr_decay_steps = 300;
     scaling = 0.2;
-    Nsave = 200;
-    
-    molecule_list = [['CH4' ,'C3H4', 'C4H6'],
-                     ['C2H2', 'C3H6','C4H8'],
-                     ['C2H4', 'C3H8','C5H8'],
-                     ['C2H6','C4H6', 'C5H10']];
+    Nsave = 300;
+    path = '/global/homes/t/th1543/v6/data';
+
+    molecule_list = [['CH4' ,'C3H8', 'C4H8', 'C7H8', 'C6H12'],
+                     ['C2H2', 'C4H6','C4H10', 'C5H12', 'C7H10'],
+                     ['C2H4', 'C3H6','C5H8', 'C6H8', 'C8H8'],
+                     ['C2H6','C3H4', 'C6H6', 'C5H10', 'C6H14']];
 
     operators_electric = [key for key in list(OPS.keys()) \
                           if key in ['x','y','z','xx','yy',
                                      'zz','xy','xz','yz']];
-        
+
     data, labels, obs_mats = load_data(molecule_list[rank], rank, 
+                                       path=path,
                                        ind_list=range(batch_size), 
                                        op_names=operators_electric);
 
@@ -70,12 +73,14 @@ def example(rank, world_size):
                             op_names=OPS);
         
         scheduler.step();
+
         with open(str(rank)+'.txt','a') as file:
             file.write(str(i)+'\t')
             for j in range(len(loss)):
                 file.write(str(loss[j])+'\t');
             file.write('\n');
-        if(i%Nsave == 0 and i>0):
+
+        if(i%Nsave == 0 and i>0 and rank==0):
             train1.save(str(i)+'_model.pt');
             print('saved model at epoch '+str(i));
 

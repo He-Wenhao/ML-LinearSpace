@@ -12,7 +12,7 @@ OPS = {'V':0.1,'E':1,
        'xx':0.1, 'yy':0.1, 'zz':0.1,
        'xy':0.1, 'yz':0.1, 'xz':0.1,
        'atomic_charge': 0.1, 'E_gap':0.1,
-       'bond_order':0.1};
+       'bond_order':0.1,'alpha':0.1};
 
 device = 'cuda:0';
 
@@ -21,7 +21,7 @@ molecule_list = ['CH4','C2H2','C2H4','C2H6','C3H4',
                  'C5H8','C5H10','C5H12','C6H6','C6H8',
                  'C6H12','C6H14','C7H8','C7H10','C8H8'];
 
-batch_size = 495;
+batch_size = 100;
 steps_per_epoch = 1;
 N_epoch = 1000;
 lr_init = 1E-2;
@@ -53,7 +53,7 @@ operators_electric = [key for key in list(OPS.keys()) \
                                  'zz','xy','xz','yz']];
     
 data, labels, obs_mats = load_data(molecule_list, device, 
-                                   ind_list=range(batch_size), 
+                                   ind_list=[4*i for i in range(batch_size)], 
                                    op_names=operators_electric);
 
 timing("data loaded")

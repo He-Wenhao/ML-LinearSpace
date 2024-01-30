@@ -8,37 +8,61 @@ Created on Thu Aug 17 16:00:28 2023
 from pkgs.dataframe import load_data;
 from pkgs.deploy import estimator;
 from pkgs.sample_minibatch import sampler;
-
+import torch;
 
 device = 'cuda:0';
+scaling = 0.2;
+batch_size = 490;
+molecule_list = ['CH4','C2H2','C2H4','C2H6','C3H4',
+                 'C3H6','C3H8','C4H6','C4H8','C4H10',
+                 'C5H8','C5H10','C5H12','C6H6','C6H8',
+                 'C6H12','C6H14','C7H8','C7H10','C8H8'];
 
-molecule_list = ['methane','ethane','ethylene','acetylene',
-                 'propane','propylene','propyne','cyclopropane'];
-
-OPS = {
+OPS = {'V':0.1,'E':1,
        'x':0.1, 'y':0.1, 'z':0.1,
        'xx':0.1, 'yy':0.1, 'zz':0.1,
-       'xy':0.1, 'yz':0.1, 'xz':0.1};
+       'xy':0.1, 'yz':0.1, 'xz':0.1,
+       'atomic_charge': 0.1, 'E_gap':0.1,
+       'bond_order':0.1, 'alpha':0.0};
 
-data, labels, obs_mat = load_data(molecule_list, device, 
-                                  ind_list=range(200),op_names=list(OPS.keys())
-                                  );
+operators_electric = [key for key in list(OPS.keys()) \
+                      if key in ['x','y','z','xx','yy',
+                                 'zz','xy','xz','yz']];
 
-sampler1 = sampler(data, labels, device);
-
-est = estimator(device);
-est.load('model.pt');
-
-batch_size = 200;
+est = estimator(device, scaling = scaling);
+est.load('0_model.pt');
 
 for i in range(len(molecule_list)):
-    E_nn = labels[i]['E_nn']
-    minibatch, labels1 = sampler1.sample(batch_size=batch_size, i_molecule=i,
-                                        op_names=list(OPS.keys()));
     
-    Ehat, E = est.solve(minibatch, labels1, obs_mat[i], E_nn,
-                        save_filename=molecule_list[i],
-                        op_names = list(OPS.keys()));
+    print('Solving '+str(i)+'th molecule: '+molecule_list[i])
 
-est.plot(molecule_list, nrows=2)
+    data, labels, obs_mat = load_data(molecule_list[i:i+1], device, 
+                            ind_list=range(batch_size),op_names=operators_electric
+                            );
+
+    sampler1 = sampler(data, labels, device);
+
+    E_nn = labels[0]['E_nn'];
+
+    elements = data[0]['elements'];
+    orbitals_list = [9*(u=='C')+5 for u in elements];
+    map1 = [sum(orbitals_list[:j]) for j in range(len(elements)+1)];
+    mati = [];
+    for j in range(len(elements)):
+        Sm = torch.zeros_like(labels[0]['Smhalf']);
+        Sm[:,map1[j]:map1[j+1],:] = \
+        labels[0]['Smhalf'][:,map1[j]:map1[j+1],:];
+        S = torch.matmul(torch.matmul(labels[0]['Smhalf'], Sm),
+                     labels[0]['S']);
+        mati.append(S[:,None,:,:]);
+    Cmat = torch.hstack(mati);
+    
+    minibatch, labels1 = sampler1.sample(batch_size=batch_size, i_molecule=0,
+                                        op_names=operators_electric);
+
+    Ehat, E = est.solve(minibatch, labels1, obs_mat[0], E_nn, data[0],
+                        save_filename=molecule_list[i],
+                        op_names = list(OPS.keys()), Cmat = Cmat);
+
+est.plot(molecule_list, nrows=4)
 
