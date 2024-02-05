@@ -132,3 +132,57 @@ class Losses(object):
         polar_out = self.loss(alpha_hat, alpha_labels);
         
         return polar_grad, polar_out;
+
+    def perturbed_op(self, op_mat, dE):
+        HdE = self.H + dE
+
+        epsilon, phi = torch.linalg.eigh(HdE.detach());
+        co = phi[:, :, :self.ne];
+        cv = phi[:, :, self.ne:];
+        epsilon_ik = (epsilon[:, :self.ne, None] - epsilon[:, None, self.ne:])**-1;
+
+        Ohat = 2 * torch.einsum('jui,juv,jvi->j', [co, op_mat, co])
+        O_term = torch.einsum('juk,juv,jvi->jik', [cv, op_mat, co]) * \
+                 torch.einsum('jui,juv,jvk->jik', [co, self.V, cv])
+        O_grad = torch.einsum('jik,jik->j',epsilon_ik, O_term)
+
+        return Ohat, O_grad
+
+    def polar_loss_num(self, P_labels, xyz_mats, Efield=1e-4,
+                                                        central_diff=False,
+                                                        return_mat=False):
+        # NOTE: return_mat is a hack for testing purposes; don't use unless debugging
+        dE = Efield
+
+        N = self.nframe
+        P_mat = torch.zeros((N,3,3), dtype=self.H.dtype, device=self.device)
+        P_grad = torch.zeros((N,3,3), dtype=self.H.dtype, device=self.device)
+
+        for i in range(3):
+            for j in range(i,3):
+                # num. deriv. of dipole moment i w.r.t. coordinate j
+
+                if central_diff:
+                    o_p, ograd_p = self.perturbed_op(xyz_mats[i], dE=dE*xyz_mats[j])
+                    o_m, ograd_m = self.perturbed_op(xyz_mats[i], dE=-dE*xyz_mats[j])
+                    P_mat[:,i,j] = (o_p - o_m) / (2 * dE)
+                    P_grad[:,i,j] = (ograd_p - ograd_m) / (2 * dE)
+                else:
+                    o_h, ograd_h = self.perturbed_op(xyz_mats[i], dE=dE*xyz_mats[j])
+                    # could afford to take this out of the loop, but w/e
+                    o_z, ograd_z = self.perturbed_op(xyz_mats[i], dE=0)
+                    P_mat[:,i,j] = (o_h - o_z) / dE
+                    P_grad[:,i,j] = (ograd_h - ograd_z) / dE
+
+                if i != j:
+                    P_mat[:,j,i] = P_mat[:,i,j]
+                    P_grad[:,j,i] = P_grad[:,i,j]
+
+        P_mat = P_mat.detach()
+        LP = self.loss(P_mat, P_labels)
+        LP_grad = torch.mean(2 * (P_mat - P_labels) * P_grad)
+
+        if return_mat:
+            return P_mat      # return P_mat directly, for testing
+        return LP_grad, LP
+
