@@ -14,8 +14,20 @@ import torch;
 class to_mat():
     
     def __init__(self, device, J_max = 3):
+
         self.device = device;
         self.CGdic = {};
+        
+        self.T_trans = torch.tensor([[1/3,0,0,-1/np.sqrt(3),0,1],
+                                     [0,1,0,0,0,0],
+                                     [0,0,0,0,1,0],
+                                     [0,1,0,0,0,0],
+                                     [1/3,0,0,-1/np.sqrt(3),0,-1],
+                                     [0,0,1,0,0,0],
+                                     [0,0,0,0,1,0],
+                                     [0,0,1,0,0,0],
+                                     [1/3,0,0,2/np.sqrt(3),0,0]],dtype=torch.float).to(self.device);
+
         for j1 in range(J_max):
             for j2 in range(J_max):
                 Jmin,Jmax = abs(j1-j2),j1+j2;
@@ -130,6 +142,13 @@ class to_mat():
         
         return torch.cat(v,dim=1);
     
+    def T_mat(self, screen, nframe, natm):
+
+        Tmat = torch.mean(screen.reshape([nframe,natm,6]), axis=1);
+        Tmat = torch.einsum('kl,il->ik',self.T_trans,Tmat);
+
+        return Tmat.reshape([nframe,3,3])/natm;
+
     def raw_to_mat(self, V_raw, minibatch, labels):
         
         node_H = self.transform(V_raw['H'],1,1);
@@ -137,6 +156,9 @@ class to_mat():
         edge_HH = self.transform(V_raw['HH'],1,1);
         edge_CH = self.transform(V_raw['CH'],2,1);
         edge_CC = self.transform(V_raw['CC'],2,2);
+        screen = V_raw['screen'];
+        gap = V_raw['gap'];
+
         norbs = labels['norbs'];
         nframe = labels['nframe'];
         map1 = labels['map1'];
@@ -151,6 +173,8 @@ class to_mat():
         edge_dst = minibatch['edge_dst'];
         
         Vmat = [torch.zeros([norbs, norbs], dtype=torch.float).to(self.device) for i in range(nframe)];
+        gap_mat = [torch.zeros([natm, natm, 2], dtype=torch.float).to(self.device) for i in range(nframe)];
+        Tmat = self.T_mat(screen, nframe, natm);
         
         for i in range(num_nodes):
             frame = batch[i];
@@ -159,13 +183,14 @@ class to_mat():
                 Vmat[frame][map1[v]:map1[v+1],map1[v]:map1[v+1]] = node_C[i];
             else:
                 Vmat[frame][map1[v]:map1[v+1],map1[v]:map1[v+1]] = node_H[i];
-            
+
         for i in range(len(HH_ind)):
             u1,u2 = edge_src[HH_ind[i]],edge_dst[HH_ind[i]];
             frame = batch[u1];
             v1 = u1-frame*natm;
             v2 = u2-frame*natm;
             Vmat[frame][map1[v1]:map1[v1+1], map1[v2]:map1[v2+1]] = edge_HH[i];
+            gap_mat[frame][v1,v2] = gap[1][i];
 
         for i in range(len(CC_ind)):
             u1,u2 = edge_src[CC_ind[i]],edge_dst[CC_ind[i]];
@@ -173,7 +198,7 @@ class to_mat():
             v1 = u1-frame*natm;
             v2 = u2-frame*natm;
             Vmat[frame][map1[v1]:map1[v1+1], map1[v2]:map1[v2+1]] = edge_CC[i];
-
+            gap_mat[frame][v1,v2] = gap[0][i];
 
         for i in range(len(CH_ind)):
             u1,u2 = edge_src[CH_ind[i]],edge_dst[CH_ind[i]];
@@ -181,9 +206,13 @@ class to_mat():
             v1 = u1-frame*natm;
             v2 = u2-frame*natm;
             Vmat[frame][map1[v1]:map1[v1+1], map1[v2]:map1[v2+1]] = edge_CH[i];
+            gap_mat[frame][v1,v2] = gap[2][i];
         
         Vmat = torch.stack([(V+V.T)/2 for V in Vmat]);
-        
-        return Vmat;
+        gap = torch.stack([G for G in gap_mat]).reshape([nframe,natm**2,2]);
+
+        gap = torch.sum(torch.nn.Softmax(dim=1)(gap[:,:,0])*gap[:,:,1], axis=1);
+
+        return Vmat, Tmat, gap;
         
         

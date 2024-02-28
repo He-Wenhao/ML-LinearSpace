@@ -48,7 +48,7 @@ class V_theta(torch.nn.Module):
         self.irreps_sh = o3.Irreps.spherical_harmonics(lmax=2);
         self.irreps_input = o3.Irreps("2x0e");
         irreps_mid1 = o3.Irreps("8x0e + 8x1o + 8x2e");
-        irreps_mid2 = o3.Irreps("8x0e + 8x0o + 8x1e + 8x1o + 4x2e + 4x2o");
+        irreps_mid2 = o3.Irreps("8x0e + 8x0o + 8x1e + 8x1o + 8x2e + 8x2o");
         
         self.linear1 = o3.Linear(self.irreps_input,
                                  self.irreps_input);
@@ -95,10 +95,17 @@ class V_theta(torch.nn.Module):
         self.linearH = o3.Linear(irreps_mid2,
                                  self.Irreps_HH);
         
-        self.fc1 = nn.FullyConnectedNet([1, emb_neurons,emb_neurons, self.tp1.weight_numel], torch.relu);
-        self.fc2 = nn.FullyConnectedNet([1, emb_neurons,emb_neurons, self.tp2.weight_numel], torch.relu);
-        self.fc_bond = nn.FullyConnectedNet([1, emb_neurons,emb_neurons, self.bond_feature.weight_numel], torch.relu);
-        self.Eg_params = torch.nn.Parameter(torch.tensor([0., 1.]));
+        self.screen1 = o3.Linear(irreps_mid2, o3.Irreps("32x0e+1x2e"));
+        self.screen_activation = nn.Activation(o3.Irreps("32x0e+1x2e"), [torch.tanh, None]);
+        self.screen2 = o3.Linear(o3.Irreps("32x0e+1x2e"), o3.Irreps("1x0e+1x2e"));
+
+        self.gap1 = o3.Linear(irreps_mid2, o3.Irreps("32x0e"));
+        self.gap_activation = nn.Activation(o3.Irreps("32x0e"), [torch.tanh]);
+        self.gap2 = o3.Linear(o3.Irreps("32x0e"), o3.Irreps("2x0e"));
+
+        self.fc1 = nn.FullyConnectedNet([1, emb_neurons,emb_neurons,emb_neurons, self.tp1.weight_numel], torch.relu);
+        self.fc2 = nn.FullyConnectedNet([1, emb_neurons,emb_neurons,emb_neurons, self.tp2.weight_numel], torch.relu);
+        self.fc_bond = nn.FullyConnectedNet([1, emb_neurons,emb_neurons,emb_neurons, self.bond_feature.weight_numel], torch.relu);
 
     def forward(self, minibatch) -> torch.Tensor:
         
@@ -124,12 +131,12 @@ class V_theta(torch.nn.Module):
         node_feature = self.activation1(node_feature);
         edge_feature = self.tp1(node_feature[edge_src], sh, self.fc1(emb));
         node_feature = scatter(edge_feature, edge_dst, dim=0, dim_size=num_nodes).div(num_neighbors**0.5);
-        node_feature = self.activation2(node_feature);
+
         node_feature = self.linear2(node_feature);
         node_feature = self.activation2(node_feature);
         edge_feature = self.tp2(node_feature[edge_src], sh, self.fc2(emb));
         node_feature = scatter(edge_feature, edge_dst, dim=0, dim_size=num_nodes).div(num_neighbors**0.5);
-        node_feature = self.activation3(node_feature);
+        
         node_feature = self.linear3(node_feature);
         node_feature = self.activation3(node_feature);
         
@@ -144,12 +151,19 @@ class V_theta(torch.nn.Module):
         node_C = self.linearC(node_feature);
         node_H = self.linearH(node_feature);
 
+        screen_mat = self.screen2(self.screen_activation(self.screen1(node_feature)));
+        gap_mat = [self.gap2(self.gap_activation(self.gap1(CC_feature))), 
+                   self.gap2(self.gap_activation(self.gap1(HH_feature))),
+                   self.gap2(self.gap_activation(self.gap1(CH_feature)))];
+
         V_raw = {'H': node_H * self.scaling,
                  'C': node_C * self.scaling,
                  'HH': edge_HH * self.scaling,
                  'CH': edge_CH * self.scaling,
-                 'CC': edge_CC * self.scaling};
+                 'CC': edge_CC * self.scaling,
+                 'screen': screen_mat,
+                 'gap': gap_mat};
         
-        return V_raw, self.Eg_params;
+        return V_raw;
 
 

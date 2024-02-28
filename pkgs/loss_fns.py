@@ -9,7 +9,7 @@ import torch;
 
 class Losses(object):
     
-    def __init__(self, h, V, ne, nbasis, nframe, device):
+    def __init__(self, h, V, ne, nbasis, nframe, device, smear = 5E-3):
         
         self.V = V;
         self.h = h;
@@ -22,9 +22,14 @@ class Losses(object):
         self.co = phi[:, :, :ne];
         self.cv = phi[:, :, ne:];
         self.phi = phi;
-        self.epsilon_ik = (self.epsilon[:, :ne, None] - self.epsilon[:, None, ne:])**-1;
+        self.epsilon_ij = (self.epsilon[:, :ne, None] - self.epsilon[:, None, ne:])**-1;
         self.device = device;
-        
+        epsilon_jk = self.epsilon[:, self.ne:, None] - self.epsilon[:, None, :];
+        self.epsilon_jk = epsilon_jk/(epsilon_jk**2 + smear**2);
+
+        epsilon_ik = self.epsilon[:, :self.ne, None] - self.epsilon[:, None, :];
+        self.epsilon_ik = epsilon_ik/(epsilon_ik**2 + smear**2);
+
     def V_loss(self):
         
         return torch.mean(self.V**2);
@@ -47,7 +52,7 @@ class Losses(object):
         O_term = (Ohat - O_labels)[:,None,None] * \
                  torch.einsum('juk,juv,jvi->jik', [self.cv, O_mats, self.co]) * \
                  torch.einsum('jui,juv,jvk->jik', [self.co, self.V, self.cv])
-        LO_grad = torch.mean(torch.einsum('jik,jik->j',self.epsilon_ik, O_term) * 2);
+        LO_grad = torch.mean(torch.einsum('jik,jik->j',self.epsilon_ij, O_term) * 2);
             
         LO_out = torch.mean((Ohat - O_labels)**2/2);
         
@@ -59,7 +64,7 @@ class Losses(object):
         C_term = (Chat - C_labels)[:,:,None,None] * \
                  torch.einsum('juk,jsuv,jvi->jsik', [self.cv, C_mats, self.co]) * \
                  torch.einsum('jui,juv,jvk->jik', [self.co, self.V, self.cv])[:,None,:,:]
-        LC_grad = torch.mean(torch.einsum('jik,jsik->js',self.epsilon_ik, C_term)) * 2
+        LC_grad = torch.mean(torch.einsum('jik,jsik->js',self.epsilon_ij, C_term)) * 2
         LC_out  = torch.mean((Chat - C_labels)**2/2);
         
         return LC_grad, LC_out;
@@ -77,7 +82,7 @@ class Losses(object):
         term1 = 8*(Bhat-B_labels);
         
         term2 = torch.einsum('umj,umn,uni,uij->uij', 
-                             [self.cv, self.V, self.co, self.epsilon_ik]);
+                             [self.cv, self.V, self.co, self.epsilon_ij]);
         
         term31 = torch.einsum('umi,uamn,unw,ubwq,uqj->uabij', 
                               [self.co, B_mats, P, B_mats, self.cv]);
@@ -92,19 +97,22 @@ class Losses(object):
         
         return LB_grad, LB_out;
 
-    def Eg_loss(self, Eg_labels, bias):
-        
-        Eghat = bias[0] + (self.epsilon[:, self.ne] - self.epsilon[:, self.ne-1])*bias[1];
-        Eg_grad = 2*(Eghat.detach() - Eg_labels) * \
-            (Eghat + (torch.einsum('ui,uk,uik->u',[self.cv[:,:,0], self.cv[:,:,0], self.H]) - \
-             torch.einsum('ui,uk,uik->u',[self.co[:,:,-1], self.co[:,:,-1], self.H])) * bias[1].detach());
-        
-        Eg_grad = torch.mean(Eg_grad);
+    def Eg_loss(self, Eg_labels, Gmat, C_mats):
+
+        valence = self.co[:,:,-1];
+        conduction = self.cv[:,:,0];
+        Eghat = self.epsilon[:, self.ne] - self.epsilon[:, self.ne-1] - Gmat.detach();
+
+        grad_factor = 2*(Eghat - Eg_labels);
+        grad_term_1 = -Gmat + torch.einsum('ui,uk,uik->u',[conduction, conduction, self.V]) - \
+             torch.einsum('ui,uk,uik->u',[valence, valence, self.V]);
+
+        Eg_grad = torch.mean(grad_factor * grad_term_1);
         Eg_out = self.loss(Eghat, Eg_labels);
         
         return Eg_grad, Eg_out;
     
-    def polar_loss(self, alpha_labels, r_mats, smear=2E-2):
+    def polar_loss(self, alpha_labels, r_mats, T_mats, smear=5E-3):
         
         r_all = torch.einsum('umi, xumn, unj -> uxij', [self.phi, r_mats, self.phi]);
         rij = r_all[:, :, :self.ne, self.ne:];
@@ -118,71 +126,19 @@ class Losses(object):
         Vkk = torch.diagonal(V_all, dim1=1, dim2=2);
         V_diff = Vkk[:,:self.ne,None] - Vkk[:,None,self.ne:];
 
-        epsilon_jk = self.epsilon[:, self.ne:, None] - self.epsilon[:, None, :];
-        epsilon_jk = epsilon_jk/(epsilon_jk**2 + smear**2)**-1;
+        alpha_0 = - 4*torch.einsum('uxij, uyij, uij -> uxy', [rij, rij, self.epsilon_ij]);
+        denominator = torch.linalg.inv(torch.eye(3).to(self.device)+torch.matmul(alpha_0,T_mats));
+        alpha_hat = torch.matmul(denominator, alpha_0);
 
-        alpha_hat = - 4*torch.einsum('uxij, uyij, uij -> uxy', [rij, rij, self.epsilon_ik]);
+        grad_term_1 = torch.einsum('uxij, uyij, uij, uij -> uxy',[rij,rij,self.epsilon_ij**2, V_diff]);
+        grad_term_2 = -2*torch.einsum('uxij, uyik, ujk, uij, ujk -> uxy', [rij, rik, Vjk, self.epsilon_ij, self.epsilon_jk]);
+        grad_term_3 = -2*torch.einsum('uxij, uyjk, uik, uij, uik -> uxy', [rij, rjk, Vik, self.epsilon_ij, self.epsilon_ik]);
 
-        grad_term_1 = torch.einsum('uxij, uyij, uij, uij -> uxy',[rij,rij,self.epsilon_ik**2, V_diff]);
-        grad_term_2 = -2*torch.einsum('uxij, uyik, ujk, uij, ujk -> uxy', [rij, rik, Vjk, self.epsilon_ik, epsilon_jk]);
-        grad_term_3 = -2*torch.einsum('uxij, uyjk, uik, uij, ujk -> uxy', [rij, rjk, Vik, self.epsilon_ik, epsilon_jk]);
+        polar_grad = 2*(alpha_hat.detach() - alpha_labels) * (alpha_hat + \
+                     torch.matmul(torch.matmul(denominator.detach(), grad_term_1 + grad_term_2 + grad_term_3),
+                                  torch.eye(3).to(self.device)-torch.matmul(T_mats, alpha_hat).detach()));
 
-        polar_grad = 2*(alpha_hat - alpha_labels) * (grad_term_1 + grad_term_2 + grad_term_3);
         polar_grad = torch.mean(polar_grad);
         polar_out = self.loss(alpha_hat, alpha_labels);
         
         return polar_grad, polar_out;
-
-    def perturbed_op(self, op_mat, dE):
-        HdE = self.H + dE
-
-        epsilon, phi = torch.linalg.eigh(HdE.detach());
-        co = phi[:, :, :self.ne];
-        cv = phi[:, :, self.ne:];
-        epsilon_ik = (epsilon[:, :self.ne, None] - epsilon[:, None, self.ne:])**-1;
-
-        Ohat = 2 * torch.einsum('jui,juv,jvi->j', [co, op_mat, co])
-        O_term = torch.einsum('juk,juv,jvi->jik', [cv, op_mat, co]) * \
-                 torch.einsum('jui,juv,jvk->jik', [co, self.V, cv])
-        O_grad = torch.einsum('jik,jik->j',epsilon_ik, O_term)
-
-        return Ohat, O_grad
-
-    def polar_loss_num(self, P_labels, xyz_mats, Efield=1e-4,
-                                                        central_diff=False,
-                                                        return_mat=False):
-        # NOTE: return_mat is a hack for testing purposes; don't use unless debugging
-        dE = Efield
-
-        N = self.nframe
-        P_mat = torch.zeros((N,3,3), dtype=self.H.dtype, device=self.device)
-        P_grad = torch.zeros((N,3,3), dtype=self.H.dtype, device=self.device)
-
-        for i in range(3):
-            for j in range(i,3):
-                # num. deriv. of dipole moment i w.r.t. coordinate j
-
-                if central_diff:
-                    o_p, ograd_p = self.perturbed_op(xyz_mats[i], dE=dE*xyz_mats[j])
-                    o_m, ograd_m = self.perturbed_op(xyz_mats[i], dE=-dE*xyz_mats[j])
-                    P_mat[:,i,j] = (o_p - o_m) / (2 * dE)
-                    P_grad[:,i,j] = (ograd_p - ograd_m) / (2 * dE)
-                else:
-                    o_h, ograd_h = self.perturbed_op(xyz_mats[i], dE=dE*xyz_mats[j])
-                    # could afford to take this out of the loop, but w/e
-                    o_z, ograd_z = self.perturbed_op(xyz_mats[i], dE=0)
-                    P_mat[:,i,j] = (o_h - o_z) / dE
-                    P_grad[:,i,j] = (ograd_h - ograd_z) / dE
-
-                if i != j:
-                    P_mat[:,j,i] = P_mat[:,i,j]
-                    P_grad[:,j,i] = P_grad[:,i,j]
-
-        P_mat = P_mat.detach()
-        LP = self.loss(P_mat, P_labels)
-        LP_grad = torch.mean(2 * (P_mat - P_labels) * P_grad)
-
-        if return_mat:
-            return P_mat      # return P_mat directly, for testing
-        return LP_grad, LP
-

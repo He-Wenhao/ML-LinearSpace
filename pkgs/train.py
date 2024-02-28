@@ -92,9 +92,12 @@ class trainer():
 
                 E = labels['Ee'];  # ccsdt total energy
 
-                V_raw, Eg_params = self.model(minibatch);
+                V_raw = self.model(minibatch);
 
-                V = self.transformer.raw_to_mat(V_raw,minibatch,labels)*self.scaling;
+                V, T, G = self.transformer.raw_to_mat(V_raw,minibatch,labels);
+
+                V *= self.scaling['V'];
+                T *= self.scaling['T'];
                 
                 loss_calculator = Losses(h, V, ne, nbasis, nframe, self.device);
                 
@@ -124,7 +127,7 @@ class trainer():
                     elif(op_name == 'E_gap'):
                         
                         Egap = labels['E_gap'];
-                        Lgap_grad, Lgap_out = loss_calculator.Eg_loss(Egap, Eg_params);
+                        Lgap_grad, Lgap_out = loss_calculator.Eg_loss(Egap, G, C_mat);
                         
                         L_grads[op_name] = Lgap_grad;
                         L_ave[i] += Lgap_out;
@@ -143,7 +146,7 @@ class trainer():
                         r_mats = torch.stack([self.op_matrices[i_m]['x'],
                                                 self.op_matrices[i_m]['y'],
                                                 self.op_matrices[i_m]['z']]);
-                        Lalpha_grad, Lalpha_out = loss_calculator.polar_loss(alpha, r_mats);
+                        Lalpha_grad, Lalpha_out = loss_calculator.polar_loss(alpha, r_mats, T);
 
                         L_grads[op_name] = Lalpha_grad;
                         L_ave[i] += Lalpha_out;
@@ -270,9 +273,11 @@ class trainer_ddp():
 
                 E = labels['Ee'];  # ccsdt total energy
 
-                V_raw, Eg_params = self.model(minibatch);
+                V_raw = self.model(minibatch);
 
-                V = self.transformer.raw_to_mat(V_raw,minibatch,labels)*self.scaling;
+                V, T, G = self.transformer.raw_to_mat(V_raw,minibatch,labels);
+                V *= self.scaling['V'];
+                T *= self.scaling['T'];
                 
                 loss_calculator = Losses(h, V, ne, nbasis, nframe, self.device);
                 
@@ -302,7 +307,7 @@ class trainer_ddp():
                     elif(op_name == 'E_gap'):
                         
                         Egap = labels['E_gap'];
-                        Lgap_grad, Lgap_out = loss_calculator.Eg_loss(Egap, Eg_params);
+                        Lgap_grad, Lgap_out = loss_calculator.Eg_loss(Egap, G, C_mat);
                         
                         L_grads[op_name] = Lgap_grad;
                         L_ave[i] += Lgap_out;
@@ -321,7 +326,7 @@ class trainer_ddp():
                         r_mats = torch.stack([self.op_matrices[i_m]['x'],
                                                 self.op_matrices[i_m]['y'],
                                                 self.op_matrices[i_m]['z']]);
-                        Lalpha_grad, Lalpha_out = loss_calculator.polar_loss(alpha, r_mats);
+                        Lalpha_grad, Lalpha_out = loss_calculator.polar_loss(alpha, r_mats, T);
 
                         L_grads[op_name] = Lalpha_grad;
                         L_ave[i] += Lalpha_out;

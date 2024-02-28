@@ -65,9 +65,11 @@ class estimator():
         nframe = labels['nframe']
         E = labels['Ee'];  # ccsdt total energy
 
-        V_raw, Eg_params = self.model(minibatch);
+        V_raw = self.model(minibatch);
 
-        V = self.transformer.raw_to_mat(V_raw,minibatch,labels)*self.scaling;
+        V, T, G = self.transformer.raw_to_mat(V_raw,minibatch,labels);
+        V *= self.scaling['V'];
+        T *= self.scaling['T'];
 
         pred = predict_fns(h, V, ne, nbasis, nframe, self.device);
 
@@ -118,7 +120,7 @@ class estimator():
             if(op_name == 'E_gap'):
 
                 Eg = labels['E_gap'];
-                Eg_hat = pred.Eg(Eg_params);
+                Eg_hat = pred.Eg(G);
                 obj['E_gap'] = {'Eg': Eg.tolist(),
                                 'Eg_hat': Eg_hat.tolist()};
 
@@ -135,7 +137,7 @@ class estimator():
                 r_mats = torch.stack([obs_mat['x'],
                                       obs_mat['y'],
                                       obs_mat['z']]);
-                alpha_hat = pred.alpha(r_mats);
+                alpha_hat = pred.alpha(r_mats, T);
                 obj['alpha'] = {'alpha': alpha.tolist(),
                                 'alpha_hat': alpha_hat.tolist()};
 
@@ -167,18 +169,21 @@ class estimator():
             
             plt.plot([np.min(E)*27.211,np.max(E)*27.211], [np.min(E)*27.211,np.max(E)*27.211], 
                      linestyle='dashed', linewidth = 3,c='red');
-            plt.scatter(np.array(E)*27.211,np.array(Ehat)*27.211, alpha=0.4);
+            plt.scatter(np.array(E)*27.211,np.array(Ehat)*27.211, alpha=0.7);
             
             plt.title(molecule_list[i]);
             plt.xlabel('E$_{CCSDT}$  (eV)');
             plt.ylabel('E$_{NN}$  (eV)');
             res.append(np.mean((np.array(E)-np.array(Ehat))**2));
 
-            if(molecule_list[i]=='CH4'):
-                atm_str = 'C1H4';
+            if(molecule_list[i]=='C10H10'):
+                natm = 20;
             else:
-                atm_str = molecule_list[i];
-            natm =(int(atm_str[1])+int(atm_str[3:]));
+                if(molecule_list[i]=='CH4'):
+                    atm_str = 'C1H4';
+                else:
+                    atm_str = molecule_list[i];
+                natm =(int(atm_str[1])+int(atm_str[3:]));
 
             res1.append(np.mean((np.array(E)-np.array(Ehat))**2)/natm**2);
         plt.tight_layout();
@@ -197,7 +202,7 @@ class estimator():
             ncols = int((len(molecule_list)-1)//nrows)+1; 
             
             matplotlib.rc('font', **font)
-            plt.figure(figsize=(3*ncols,2.5*nrows));
+            plt.figure(figsize=(15,10));
             res = [];
             
             if(ops=='dipole'):
@@ -224,7 +229,7 @@ class estimator():
                     O += data[opsi]['O'];
                     Ohat += data[opsi]['Ohat'];
             
-                plt.scatter(np.array(O),np.array(Ohat), alpha=0.4, c='blue');
+                plt.scatter(np.array(O),np.array(Ohat), alpha=0.7, c='blue');
                 res.append(np.mean((np.array(O)-np.array(Ohat))**2));
 
             plt.xlabel(ops+'$_{CCSDT}$  '+unit);
@@ -241,7 +246,7 @@ class estimator():
             ncols = int((len(molecule_list)-1)//nrows)+1; 
             
             matplotlib.rc('font', **font)
-            plt.figure(figsize=(3*ncols,2.5*nrows));
+            plt.figure(figsize=(15,10));
             res = [];
             plt.plot([-0.6, 0.6], [-0.6, 0.6], 
                         linestyle='dashed', linewidth = 3,c='red');
@@ -277,7 +282,7 @@ class estimator():
             ncols = int((len(molecule_list)-1)//nrows)+1; 
             
             matplotlib.rc('font', **font)
-            plt.figure(figsize=(3*ncols,2.5*nrows));
+            plt.figure(figsize=(15,10));
             res = [];
             plt.plot([0,3], [0,3], 
                          linestyle='dashed', linewidth = 3,c='red');
@@ -315,7 +320,7 @@ class estimator():
             ncols = int((len(molecule_list)-1)//nrows)+1; 
             
             matplotlib.rc('font', **font)
-            plt.figure(figsize=(3*ncols,2.5*nrows));
+            plt.figure(figsize=(15,10));
             res = [];
             
             for i in range(len(molecule_list)):
@@ -348,7 +353,7 @@ class estimator():
             ncols = int((len(molecule_list)-1)//nrows)+1; 
             
             matplotlib.rc('font', **font)
-            plt.figure(figsize=(3*ncols,2.5*nrows));
+            plt.figure(figsize=(15,10));
             res = [];
 
             plt.plot([0,12.5], [0,12.5], 

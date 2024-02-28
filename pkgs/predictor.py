@@ -22,7 +22,7 @@ class predict_fns(object):
         self.co = phi[:, :, :ne];
         self.cv = phi[:, :, ne:];
         self.phi = phi;
-        self.epsilon_ik = (self.epsilon[:, :ne, None] - self.epsilon[:, None, ne:])**-1;
+        self.epsilon_ij = (self.epsilon[:, :ne, None] - self.epsilon[:, None, ne:])**-1;
         self.device = device;
     
     def E(self, Enn):
@@ -54,18 +54,22 @@ class predict_fns(object):
 
         return Bhat;
 
-    def Eg(self, bias):
+    def Eg(self, Gmat):
         
-        Eghat = bias[0] + (self.epsilon[:, self.ne] - self.epsilon[:, self.ne-1])*bias[1];
+        Eghat = self.epsilon[:, self.ne] - self.epsilon[:, self.ne-1] - Gmat.detach();
 
         return Eghat;
     
-    def alpha(self, r_mats):
+    def alpha(self, r_mats, T_mats):
         
         r_all = torch.einsum('umi, xumn, unj -> uxij', [self.phi, r_mats, self.phi]);
         rij = r_all[:, :, :self.ne, self.ne:];
+        rik = r_all[:, :, :self.ne, :];
+        rjk = r_all[:, :, self.ne:, :];
 
-        alpha_hat = - 4*torch.einsum('uxij, uyij, uij -> uxy', [rij, rij, self.epsilon_ik]);
+        alpha_0 = - 4*torch.einsum('uxij, uyij, uij -> uxy', [rij, rij, self.epsilon_ij]);
+        denominator = torch.linalg.inv(torch.eye(3).to(self.device)+torch.matmul(alpha_0,T_mats));
+        alpha_hat = torch.matmul(denominator, alpha_0);
 
         return alpha_hat;
 
