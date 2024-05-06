@@ -1,4 +1,4 @@
-# ML_DFT
+# EGNN-CCSDT
 
 The training program can be launched by running workspace.py, requiring the installation of:
 PyTorch, torch_scatter, torch_cluster, and e3nn. 
