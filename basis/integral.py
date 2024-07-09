@@ -10,12 +10,20 @@ import torch;
 from scipy.interpolate import lagrange;
 import numpy as np;
 import scipy;
+from periodictable import elements
 
 class integrate():
 
-    def __init__(self, device):
+    def __init__(self, device, starting_basis):
 
-        with open('script/orbitals.json','r') as file:
+        if(starting_basis == 'cc-pVDZ'):
+            filename = 'basis/orbitals_CH.json';
+        elif(starting_basis == 'def2-SVP'):
+            filename = 'basis/orbitals_new.json';
+        else:
+            raise ValueError('The basis set is not supported');
+            
+        with open(filename, 'r') as file:
             self.orbs_elements = json.load(file);
         self.device = device;
         self.zeta = {};
@@ -38,14 +46,14 @@ class integrate():
                 self.Ng[key] += len(u['c']);
                 self.Nb[key] += 1;
         
-        xlist = np.linspace(-3,3,7);
+        xlist = np.linspace(-4,4,9);
         matrix = [];
-        for i in range(7):
-            ylist = np.zeros(7);
+        for i in range(9):
+            ylist = np.zeros(9);
             ylist[i] = 1;
             res = np.flip(lagrange(xlist, ylist).coef);
-            res = res.tolist()+[0]*(7-len(res));
-            matrix.append([res[2*n]*scipy.special.factorial2(max(2*n-1,0))/2**n*np.sqrt(np.pi) for n in range(4)]);
+            res = res.tolist()+[0]*(9-len(res));
+            matrix.append([res[2*n]*scipy.special.factorial2(max(2*n-1,0))/2**n*np.sqrt(np.pi) for n in range(5)]);
         self.mat = torch.tensor(matrix, dtype=torch.float).to(self.device);
                 
     def Mat(self, z1, z2, x1, x2, k1, k2, polynomial):
@@ -56,11 +64,11 @@ class integrate():
         xc, r1, r2 = xc[:,:,:,:,None],(x1-xc)[:,:,:,:,None], (x2-xc)[:,:,:,:,None];
         exponent_term = torch.exp(-z1*z2/(z1+z2)*torch.sum((x1-x2)**2, axis=3));
         
-        x = torch.linspace(-3,3,7)[None,None,None,None,:].to(self.device);
+        x = torch.linspace(-4,4,9)[None,None,None,None,:].to(self.device);
         integrant = (x+xc)**polynomial*(x-r1)**k1[:,:,:,:,None]*(x-r2)**k2[:,:,:,:,None];
         integrant = torch.einsum('ijklm,mn->ijkln', [integrant, self.mat]);
         
-        divided = (z1+z2)[:,:,:,None,None]**torch.tensor([1/2+i for i in range(4)],
+        divided = (z1+z2)[:,:,:,None,None]**torch.tensor([1/2+i for i in range(5)],
                                                          dtype=torch.float)[None,None,None,None,:].to(self.device);
         integrant /= divided;
         results = torch.sum(integrant, axis=4);
@@ -77,8 +85,8 @@ class integrate():
         angstron2Bohr = 1.88973;
         pos = pos.to(self.device)*angstron2Bohr;
         pos[:,:,[1,2,0]] = pos[:,:,[0,1,2]];
-     
-        mass = {'H':1.00794, 'C':12.011};
+        mass = {el.symbol: el.mass for el in elements}
+
         ml = torch.tensor([mass[e1] for e1 in atm], dtype=torch.float).to(self.device);
         center = torch.einsum('uij,i->uj',[pos,ml])/torch.sum(ml);
         pos -= center[:,None,:];
