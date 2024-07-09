@@ -111,7 +111,7 @@ class V_theta(torch.nn.Module):
 
         for i in range(3):
             edge_feature = self.tp_convs[i](node_feature[edge_src], sh, self.fcs[i](emb));
-            node_feature = scatter(edge_feature, edge_dst, dim=0, dim_size=num_nodes).div(num_neighbors**0.5);
+            node_feature = scatter(edge_feature, edge_dst, dim=0, dim_size=num_nodes).div(num_neighbors[:,None]**0.5);
             node_feature = self.linears[i](inputs, node_feature);
             node_feature = self.activations[i](node_feature);
 
@@ -125,7 +125,7 @@ class V_theta(torch.nn.Module):
         node_onsite = [linear_layer(node_feature)* self.scaling for linear_layer in self.linear_node];
 
         screen_mat = self.screen2(self.screen_activation(self.screen1(node_feature)));
-        gap_mat = self.gap2(self.gap_activation(self.gap1(output_edge_feature)));
+        gap_mat = self.gap2(self.gap_activation(self.gap1(node_feature)));
 
         V_raw = {'node': node_onsite,
                  'edge': edge_pair,

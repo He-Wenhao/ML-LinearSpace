@@ -21,38 +21,86 @@ class sampler(object):
         self.min_radius = min_radius;
         self.irreps_sh = o3.Irreps.spherical_harmonics(lmax=2);
 
-    def sample(self, batch_size, i_molecule, irreps, op_names=[]):
+    def count(self, batch, tensor):
 
-        data = self.data[i_molecule];
+        Nedge = torch.sum(tensor[None, :] == batch[:, None], dim=1)
+        Nnodes = torch.sum(batch[None, :] == batch[:, None], dim=1)
 
-        ind = [i for i in range(len(self.data[i_molecule]['pos']))];
-#        np.random.shuffle(ind);
+        return Nedge/Nnodes;
+
+    def radius_embedding(self, rnorm):
+
+        crit1, crit2 = rnorm<self.max_radius, rnorm>self.min_radius;
+        emb = (torch.cos(rnorm/self.max_radius*torch.pi)+1)/2; 
+        emb = (emb*crit1*crit2 + (~crit2)).reshape(len(emb),1);
+
+        return emb
+    
+    def element_embedding(self, elements, irreps):
+
+        element_embed = irreps.get_onehot();
+        f_in = [];
+        for ele in elements:
+            f_in += [element_embed[u] for u in ele];
+        f_in = torch.tensor(f_in, dtype=torch.float).to(self.device);
+
+        return f_in;
+
+    def get_map(self, elements, irreps):
+
+        nbasis = irreps.get_nbasis();
+        map1 = [];
+        for ele in elements:
+            mapi = [nbasis[e1] for e1 in ele];
+            mapi = [sum(mapi[:i]) for i in range(len(mapi)+1)];
+            map1.append(mapi);
+
+        return map1;
+
+    def get_list(self, labels, op_name):
+        if(op_name in ['B','atomic_charge']):
+            return [l[op_name] for l in labels];
+
+        return [l[op_name] for l in labels];
+
+    def get_tensor(self, data, op_name, basis_max):
+        
+        tensor = torch.zeros([len(data), basis_max, basis_max]);
+        for i in range(len(data)):
+            tensor[i, :data[i]['norbs'], :data[i]['norbs']] = data[i][op_name];
+
+        return tensor.to(self.device);
+
+    def sample(self, batch_size, irreps, op_names=[]):
+
+        ind = list(range(len(self.data)));
+        np.random.shuffle(ind);
         ind = ind[:batch_size];
-        natm = len(data['elements']);
-        nframe = len(ind);
-        num_nodes = nframe*natm;
+        data = [self.data[i] for i in ind];
+        labels = [self.labels[i] for i in ind];
 
-        pos = data['pos'][ind].reshape([-1,3]);
-        batch = torch.tensor([int(i//natm) for i in range(num_nodes)]).to(self.device);
+        elements = [u['elements'] for u in data];
+        natms = [len(u) for u in elements];
+        num_nodes = sum(natms);
+
+        pos = torch.vstack([dp['pos'] for dp in data]);
+        batch = torch.cat([torch.tensor([i]*n).to(self.device) for i,n in enumerate(natms)]);
         edge_src, edge_dst = radius_graph(x=pos, r=self.max_radius, batch=batch);
         self_edge = torch.tensor([i for i in range(num_nodes)]).to(self.device);
         edge_src = torch.cat((edge_src, self_edge));
         edge_dst = torch.cat((edge_dst, self_edge));
         edge_vec = pos[edge_src] - pos[edge_dst];
-        num_neighbors = len(edge_src) / num_nodes;
+
+        num_neighbors = self.count(batch, batch[edge_src]);
+
         sh = o3.spherical_harmonics(l = self.irreps_sh, 
                                     x = edge_vec, 
                                     normalize=True, 
                                     normalization='component').to(self.device)
 
         rnorm = edge_vec.norm(dim=1);
-        crit1, crit2 = rnorm<self.max_radius, rnorm>self.min_radius;
-        emb = (torch.cos(rnorm/self.max_radius*torch.pi)+1)/2; 
-        emb = (emb*crit1*crit2 + (~crit2)).reshape(len(edge_src),1);
-
-        element_embedding = irreps.get_onehot();
-        f_in = torch.tensor([element_embedding[u] for u in data['elements']]*nframe,
-                            dtype=torch.float).to(self.device);
+        emb = self.radius_embedding(rnorm);
+        f_in = self.element_embedding(elements, irreps);
 
         pair_ind = [];
         nele = irreps.get_input_irreps();
@@ -61,9 +109,8 @@ class sampler(object):
                 ind1 = torch.argwhere(f_in[edge_src][:,i]*f_in[edge_dst][:,j]).reshape(-1);
                 pair_ind.append(ind1);
 
-        nbasis = irreps.get_nbasis();
-        map1 = [nbasis[ele] for ele in data['elements']];
-        map1 = [sum(map1[:i]) for i in range(len(map1)+1)];
+        map1 = self.get_map(elements, irreps);
+        basis_max = max([dp['norbs'] for dp in data]);
 
         minibatch = {
                      'sh': sh,
@@ -74,24 +121,21 @@ class sampler(object):
                      'num_nodes': num_nodes,
                      'num_neighbors':num_neighbors,
                      'pair_ind': pair_ind,
+                     'norbs': [dp['norbs'] for dp in data],
+                     'batch': batch,
+                     'map1': map1,
+                     'natm': natms,
+                     'ne': [dp['ne'] for dp in data],
+                     'h': self.get_tensor(data, 'h', basis_max)
                      };
 
-        batch_labels = {
-            'norbs': data['properties']['norbs'],
-            'nframe': len(ind),
-            'batch': batch,
-            'map1': map1,
-            'natm': natm,
-            'h': self.labels[i_molecule]['h'][ind],
-            'Ee': self.labels[i_molecule]['E'][ind]-self.labels[i_molecule]['E_nn'][ind],
-            'ne': data['properties']['ne'],
-            'atomic_charge': self.labels[i_molecule]['atomic_charge'][ind],
-            'E_gap': self.labels[i_molecule]['E_gap'][ind],
-            'B': self.labels[i_molecule]['B'][ind],
-            'alpha': self.labels[i_molecule]['alpha'][ind]
-            };
+        batch_labels = {};
+        if('E' in labels[0]):
+            batch_labels['Ee'] = [l['E']-l['E_nn'] for l in labels]
+        
+        op_names += ['atomic_charge','E_gap','B','alpha'];
 
         for op_name in op_names:
-            batch_labels[op_name] = self.labels[i_molecule][op_name][ind]
+            batch_labels[op_name] = self.get_list(labels, op_name);
 
-        return minibatch, batch_labels;
+        return minibatch, batch_labels, ind;
