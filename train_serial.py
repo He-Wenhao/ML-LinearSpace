@@ -33,7 +33,7 @@ loader = dataloader(device=device, element_list = element_list,
                         path = path, batch_size = batch_size, 
                         starting_basis = 'def2-SVP');
 
-data, labels, obs_mats = loader.load_data('group2');
+data, labels, obs_mats = loader.load_data(datagroup);
     
 train1 = trainer(device, data, labels,
                 filename='model.pt',
