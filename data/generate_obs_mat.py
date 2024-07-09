@@ -9,6 +9,8 @@ import json;
 from data import load_data;
 from basis import integrate;
 
+starting_basis = 'cc-pVDZ';
+
 for task in range(23):
 
     molecule_list = ['CH4','C2H2','C2H4','C2H6','C3H4',
@@ -22,7 +24,7 @@ for task in range(23):
     
     data, labels, obs_mat = load_data(molecule_list, device, load_obs_mat=False, 
                              ind_list=[], op_names=OPS);
-    integrator = integrate(device);
+    integrator = integrate(device, starting_basis=starting_basis);
     
     pos = data[0]['pos'];
     atm = data[0]['elements'];
