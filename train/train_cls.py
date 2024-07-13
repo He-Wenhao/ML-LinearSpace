@@ -13,6 +13,7 @@ from model.sample_minibatch import sampler;
 from model.tomat import to_mat;
 from torch.nn.parallel import DistributedDataParallel as DDP;
 from train.loss_fns import Losses;
+import os;
 
 class trainer():
 
@@ -46,7 +47,7 @@ class trainer():
     def build_ddp_model(self, scaling = {'V':0.2, 'T': 0.01}):
             
         self.scaling = scaling;
-        self.model = DDP(V_theta(self.device,self.irreps).to(device), device_ids=[self.device]);
+        self.model = DDP(V_theta(self.device,self.irreps).to(self.device), device_ids=[self.device]);
 
     def build_optimizer(self, lr=10**-3):
 
@@ -72,22 +73,23 @@ class trainer():
             self.charge_matrices.append(torch.stack(mati).to(self.device));
 
     def load(self, filename):
-        
-        try:
-            self.model.load_state_dict(torch.load(filename));
-        except:
+
+        if(os.path.exists('model.pt')):
             try:
-                res = torch.load(filename);
-                for key in list(res.keys()):
-                    res[key[7:]] = res[key];
-                    del res[key];
-                self.model.load_state_dict(res);
+                self.model.load_state_dict(torch.load(filename));
             except:
-                res = torch.load(filename);
-                for key in list(res.keys()):
-                    res['module.'+key] = res[key];
-                    del res[key];
-                self.model.load_state_dict(res);
+                try:
+                    res = torch.load(filename);
+                    for key in list(res.keys()):
+                        res[key[7:]] = res[key];
+                        del res[key];
+                    self.model.load_state_dict(res);
+                except:
+                    res = torch.load(filename);
+                    for key in list(res.keys()):
+                        res['module.'+key] = res[key];
+                        del res[key];
+                    self.model.load_state_dict(res);
 
     def save(self, filename):
         
@@ -163,9 +165,10 @@ class trainer():
                 LO, LO_out = loss_calculator.O_loss(O, O_mat);
                 L_grads[op_name] = LO;
                 L_ave[i] += LO_out;
-                    
+        
+        regularization = sum([p.square().sum() for p in self.model.parameters()])/1E10;
         L = sum([op_names[key]*L_grads[key] \
-                    for key in op_names])/len(ind);
+                    for key in op_names])/len(ind) + regularization;
 
         return L, L_ave;
 
@@ -189,7 +192,7 @@ class trainer():
         L_ave = np.zeros(len(op_names));
         
         for _ in range(steps):  # outer loop of training steps
-
+            
             ########### forward calculations ################
             # apply the NN-model to get K-S potential
             self.optim.zero_grad()  # clear gradient
@@ -212,7 +215,5 @@ class trainer():
 
             L_ave += loss_out;
 
-        torch.save(self.model.state_dict(), self.filename);
-
-        return L_ave/steps/batch_size;
+        return L_ave/steps;
 
