@@ -9,6 +9,7 @@ Created on Wed Aug 16 13:16:53 2023
 import json;
 import numpy as np;
 import scipy;
+import os;
 
 def radius_coef(n,z):
     
@@ -109,22 +110,27 @@ def get_orbital(data, line):
 
 def read_basis(path='/pscratch/sd/t/th1543/v2.0/basis', savefile = False):
 
-    line = 2;
-    output = {};
+    if(not os.path.exists(path + '/orbitals_new.json')):
 
-    with open(path + '/def2-svp','r') as file:
-        data = file.readlines();
+        line = 2;
+        output = {};
 
-    while(line < len(data)):
+        with open(path + '/def2-svp','r') as file:
+            data = file.readlines();
+
+        while(line < len(data)):
+            
+            ele, orbs, line = get_orbital(data, line);
+            output[ele] = orbs;
+            line += 4;
+
+        if(savefile):
+            with open(path + '/orbitals_new.json','w') as file:
+                json.dump(output,file);
         
-        ele, orbs, line = get_orbital(data, line);
-        output[ele] = orbs;
-        line += 4;
-
-    if(savefile):
-        with open(path + '/orbitals_new.json','w') as file:
-            json.dump(output,file);
+        return output;
     
-    return output;
+    else:
 
-read_basis(savefile=True);
+        return 'file already exists';
+
