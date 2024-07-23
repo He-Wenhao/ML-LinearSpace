@@ -71,11 +71,11 @@ class sampler(object):
 
         return tensor.to(self.device);
 
-    def sample(self, batch_size, irreps, op_names=[]):
+    def sample(self, batch_ind, batch_size, irreps, op_names=[]):
 
         ind = list(range(len(self.data)));
-        np.random.shuffle(ind);
-        ind = ind[:batch_size];
+#        np.random.shuffle(ind);
+        ind = ind[batch_ind*batch_size : (batch_ind+1)*batch_size];
         data = [self.data[i] for i in ind];
         labels = [self.labels[i] for i in ind];
 

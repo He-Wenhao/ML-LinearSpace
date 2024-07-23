@@ -21,7 +21,7 @@ class V_theta(torch.nn.Module):
         irreps_node = irreps.get_onsite_irreps();
         irreps_sh = irreps.get_sh_irreps();
         input_dim = irreps.get_input_irreps();
-        irreps_hidden = [o3.Irreps(str(ele_emb)+'x0e')] + irreps.get_hidden_irreps();
+        irreps_hidden = [o3.Irreps(str(ele_emb)+'x0e')] + irreps.get_hidden_irreps(lmax=2);
 
         ######### Element embedding network #########
         self.ele_embed = torch.nn.Sequential(
