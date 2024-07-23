@@ -1,0 +1,18 @@
+[project]
+name = "mtelect"
+version = "0.2.0"
+authors = [
+  { name="Hao Tang", email="haot@mit.edu" },
+]
+description = "Code package for multi-task machine learning for molecular electronic structure"
+readme = "README.md"
+requires-python = ">=3.8"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: Apache License",
+    "Operating System :: OS Independent",
+]
+
+[project.urls]
+Homepage = "https://github.com/htang113/ML_electronic"
+Issues = "https://github.com/htang113/ML_electronic/issues"
