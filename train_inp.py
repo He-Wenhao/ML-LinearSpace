@@ -21,9 +21,9 @@ params['Nsave'] = 50;
 
 params['element_list'] = ['H','C','N','O','F'];
 params['path'] = '/pscratch/sd/t/th1543/v2.0/';
-params['datagroup'] = ['group0','group1','group2'];
+params['datagroup'] = ['group0'];
 params['load_model'] = False;
-params['world_size'] = 4;
+params['world_size'] = 1;
 params['output_path'] = '/pscratch/sd/t/th1543/v2.0/output/';
 params['ddp_mode'] = 'spawn';
 
