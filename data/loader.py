@@ -2,6 +2,8 @@ import json;
 import torch;
 import scipy;
 import os;
+import numpy as np;
+
 from basis.Irreps import Irreps_build;
 from basis.integral import integrate;
 
@@ -15,6 +17,7 @@ class dataloader():
         self.path = path +'/';
         self.batch_size = batch_size;
         irreps = Irreps_build(element_list);
+        self.elements = element_list;
         self.nbasis = irreps.get_nbasis();
         self.ne_dic = irreps.get_ne();
         self.op_names = ['x','y','z','xx','yy','zz','xy','xz','yz'];
@@ -94,9 +97,70 @@ class dataloader():
 
         return data_obs;
 
-    def load_data(self, group):
+    def get_files_old(self, path, rank, world_size):
 
-        fl = os.listdir(self.path + group + '/basic/');
+        fl = os.listdir(path);
+        
+        if(world_size == 1):
+
+            return fl, self.batch_size;
+        
+        else:
+
+            Nbasis = np.array([self.nbasis[el] for el in self.elements]);
+            fmat = [];
+
+            for f in fl:
+
+                res = f.split('_')[1:];
+                res[-1] = res[-1][:-5];
+                fmat.append([int(r) for r in res]);
+
+            Nbl = np.sum(np.array(fmat) * Nbasis[None,:], axis=1);
+
+            indices = np.argsort(Nbl);
+            Nb_sorted = Nbl[indices];
+            load = np.sum(Nbl)/world_size;
+
+            start = rank*load;
+            end = (rank+1)*load;
+
+            for i in range(len(Nb_sorted)):
+                
+                numbers = np.sum(Nb_sorted[:i])
+                if(numbers >= start and i <= start):
+                    start = i;
+                if(numbers >= end or i==len(Nb_sorted)-1):
+                    end = i;
+                    break;
+
+            files = [fl[i] for i in indices[start:end]];
+            partition = int(self.batch_size * (end-start) / len(fl));
+
+            print('Rank: ', rank, 'start: ', start, 'end: ', end, 'partition: ', partition)
+            return files, partition;
+    
+    def get_files(self, path_list, rank, world_size):
+
+        fl = [];
+        for path in path_list:
+            fl += [(path, f) for f in os.listdir(path)];
+        
+        if(world_size == 1):
+
+            return fl, self.batch_size;
+        
+        else:
+
+            files = fl[len(fl)*rank//world_size: len(fl)*(rank+1)//world_size]
+            partition = int(self.batch_size/world_size);
+
+            return files, partition;
+
+    def load_data(self, group, rank, world_size):
+        
+        path_list = [self.path + g + '/basic/' for g in group];
+        fl, partition = self.get_files(path_list, rank, world_size);
         
         data_in = [];
         labels = [];
@@ -104,11 +168,11 @@ class dataloader():
 
         for file in fl:
             
-            basic_path = self.path + group + '/basic/' + file;
+            basic_path = file[0] + file[1];
             data_in.append(self.read_basic(basic_path));
-            obs_path = self.path + group + '/obs/' + file[:6]+file[-5:];
+            obs_path = file[0][:-7] + '/obs/' + file[1].split('_')[0]+file[1][-5:];
             labels.append(self.read_obs(obs_path));
             obs_mat.append(self.read_obs_mat());
 
-        return data_in, labels, obs_mat;
+        return data_in, labels, obs_mat, partition;
             
