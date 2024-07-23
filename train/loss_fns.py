@@ -83,7 +83,7 @@ class Losses(object):
             O_term = (Ohat - O_labels[i]) * \
                      torch.einsum('uk,uv,vi->ik', [self.cv[i], O_mats[i], self.co[i]]) * \
                      torch.einsum('ui,uv,vk->ik', [self.co[i], self.H[i], self.cv[i]]);
-            LO_grad += torch.mean(self.epsilon_ij[i] * O_term) * 2;
+            LO_grad += torch.sum(self.epsilon_ij[i] * O_term) * 2;
             LO_out += (Ohat - O_labels[i])**2/2;
         
         return LO_grad/len(self.ne), LO_out/len(self.ne);

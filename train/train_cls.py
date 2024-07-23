@@ -190,30 +190,35 @@ class trainer():
                               if key in ['x','y','z','xx','yy',
                                          'zz','xy','xz','yz']];
         L_ave = np.zeros(len(op_names));
-        
+        N_batchs = int(round(self.n_molecules/batch_size));
+
         for _ in range(steps):  # outer loop of training steps
             
             ########### forward calculations ################
             # apply the NN-model to get K-S potential
-            self.optim.zero_grad()  # clear gradient
 
-            minibatch, labels, ind = self.sampler.sample(batch_size=batch_size,
-                                                    irreps=self.irreps, op_names=operators_electric);
-            
-            V, T, G = self.inference(minibatch);
-            
-            # number of occupied orbitals
-            h = minibatch['h'];
-            ne = minibatch['ne'];
-            norbs = minibatch['norbs'];
-            loss_calculator = Losses(h, V, T, G, ne, norbs, self.device);
-            
-            loss_grad, loss_out = self.build_loss(loss_calculator, labels, ind, op_names);
+            for batch_ind in range(N_batchs):  # inner loop of batch size
 
-            loss_grad.backward()  # calculate the gradient
-            self.optim.step()  # implement gradient descend
+                self.optim.zero_grad()  # clear gradient
 
-            L_ave += loss_out;
+                minibatch, labels, ind = self.sampler.sample(batch_ind = batch_ind, batch_size=batch_size,
+                                                        irreps=self.irreps, op_names=operators_electric);
+                
+                V, T, G = self.inference(minibatch);
+                
+                # number of occupied orbitals
+                h = minibatch['h'];
+                ne = minibatch['ne'];
+                norbs = minibatch['norbs'];
+                loss_calculator = Losses(h, V, T, G, ne, norbs, self.device);
+                
+                loss_grad, loss_out = self.build_loss(loss_calculator, labels, ind, op_names);
 
-        return L_ave/steps;
+                loss_grad.backward()  # calculate the gradient
+                self.optim.step()  # implement gradient descend
+
+                L_ave += loss_out;
+
+        return L_ave/steps/N_batchs;
+
 
