@@ -24,7 +24,7 @@ params['path'] = '';
 params['datagroup'] = ['group1'];
 params['load_model'] = False;
 params['world_size'] = 1;
-params['output_path'] = '/output/';
+params['output_path'] = 'output/';
 params['ddp_mode'] = 'spawn';
 
 if __name__ == '__main__':
