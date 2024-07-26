@@ -20,11 +20,11 @@ params['scaling'] = {'V':1, 'T': 0.01};
 params['Nsave'] = 50;
 
 params['element_list'] = ['H','C','N','O','F'];
-params['path'] = '/pscratch/sd/t/th1543/v2.0/';
+params['path'] = '';
 params['datagroup'] = ['group1'];
 params['load_model'] = False;
 params['world_size'] = 1;
-params['output_path'] = '/pscratch/sd/t/th1543/v2.0/output/';
+params['output_path'] = '/output/';
 params['ddp_mode'] = 'spawn';
 
 if __name__ == '__main__':
