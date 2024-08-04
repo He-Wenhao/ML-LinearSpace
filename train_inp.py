@@ -10,22 +10,22 @@ params['OPS'] = {'V':0.01,'E':1,
     'bond_order':0.02, 'alpha':3E-5};
 
 params['device'] = 'cuda:0';
-params['batch_size'] = 400;
+params['batch_size'] = 10;
 params['steps_per_epoch'] = 1;
-params['N_epoch'] = 2001;
+params['N_epoch'] = 41;
 params['lr_init'] = 5E-3;
-params['lr_final'] = 1E-4;
-params['lr_decay_steps'] = 100;
+params['lr_final'] = 1E-3;
+params['lr_decay_steps'] = 20;
 params['scaling'] = {'V':1, 'T': 0.01};
-params['Nsave'] = 100;
+params['Nsave'] = 20;
 
 params['element_list'] = ['H','C','N','O','F'];
 params['path'] = '/pscratch/sd/t/th1543/v2.0/';
-params['datagroup'] = ['group'+str(i) for i in range(8)];
+params['datagroup'] = ['group'+str(i) for i in range(1)];
 params['load_model'] = True;
-params['world_size'] = 16;
+params['world_size'] = 1;
 params['output_path'] = 'output/';
-params['ddp_mode'] = 'elastic';
+params['ddp_mode'] = 'serial';
 
 if(__name__ == '__main__' or params['ddp_mode'] == 'elastic'):
 
