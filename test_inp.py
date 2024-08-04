@@ -13,9 +13,9 @@ params['device'] = 'cuda:0';
 params['batch_size'] = 40;
 params['scaling'] = {'V':1, 'T': 0.01};
 params['element_list'] = ['H','C','N','O','F'];
-params['path'] = '/pscratch/sd/t/th1543/v2.0/';
+params['path'] = '';
 params['datagroup'] = ['group1'];
-params['output_path'] = '/pscratch/sd/t/th1543/v2.0/output/';
+params['output_path'] = 'output/';
 params['model_file'] = 'QM9_model.pt';
 
 test_func(params);
