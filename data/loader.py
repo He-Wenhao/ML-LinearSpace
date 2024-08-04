@@ -22,7 +22,8 @@ class dataloader():
         self.ne_dic = irreps.get_ne();
         self.op_names = ['x','y','z','xx','yy','zz','xy','xz','yz'];
 
-        self.integrator = integrate(device, starting_basis=starting_basis);
+        self.integrator = integrate(device, starting_basis=starting_basis,
+                                    path=path[:-4]+'basis/');
 
     def read_basic(self, filepath):
 
