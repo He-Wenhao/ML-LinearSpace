@@ -35,7 +35,7 @@ def train_func(rank, params):
     load_model = params['load_model'];
 
     world_size = params['world_size'];
-
+    
     ###################### load data and model ######################
 
     basis_path = path + 'basis';
@@ -98,7 +98,7 @@ def train_serial(params):
 
 def train_elastic(params):
 
-    dist.init_process_group('nccl');
+    dist.init_process_group('gloo');
     rank = dist.get_rank();
     device = rank % torch.cuda.device_count();
     params['device'] = device;

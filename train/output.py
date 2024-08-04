@@ -1,4 +1,5 @@
 import os;
+import json;
 
 class recorder:
 
@@ -12,10 +13,14 @@ class recorder:
 
         if(not os.path.exists(path+'/model')):
             os.mkdir(path+'/model');
+        
+        if(not os.path.exists(path+'/test')):
+            os.mkdir(path+'/test');
 
         self.rank = rank;
         self.loss_file = path + '/loss/loss_'+str(rank)+'.txt';
         self.model_path = path + '/model/';
+        self.test_file = path + '/test/test.json';
 
         with open(self.loss_file,'w') as file:
 
@@ -42,4 +47,9 @@ class recorder:
             print('saved model at epoch '+str(i));
 
 
-
+    def save_test(self, properties):
+        
+        with open(self.test_file, 'w') as file:
+            json.dump(properties, file);
+        
+        return None;

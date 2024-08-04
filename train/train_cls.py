@@ -43,16 +43,17 @@ class trainer():
         
         self.scaling = scaling;
         self.model = V_theta(self.device, self.irreps).to(self.device);
-    
+        self.transformer = to_mat(self.device, self.irreps);
+
     def build_ddp_model(self, scaling = {'V':0.2, 'T': 0.01}):
             
         self.scaling = scaling;
         self.model = DDP(V_theta(self.device,self.irreps).to(self.device), device_ids=[self.device]);
+        self.transformer = to_mat(self.device, self.irreps);
 
     def build_optimizer(self, lr=10**-3):
 
         self.optim = torch.optim.Adam(self.model.parameters(), lr=lr);
-        self.transformer = to_mat(self.device, self.irreps);
 
     def build_charge_matrices(self, data_in):
 
