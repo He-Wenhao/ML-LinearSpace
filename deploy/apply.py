@@ -1,6 +1,8 @@
 from basis.integral import integrate
 from model.model_cls import V_theta
 from deploy.predictor import predict_fns
+from model.sample_minibatch import sampler as sample_train
+from data.loader import dataloader
 import numpy as np
 import torch
 from model.tomat import to_mat;
@@ -11,10 +13,13 @@ import matplotlib.pyplot as plt;
 import scipy;
 from torch_cluster import radius_graph;
 from e3nn import o3;
+from deploy.deploy_cls import estimator_test
+from periodictable import elements
 
-class estimator():
+class estimator(estimator_test):
 
-    def __init__(self, device, output_folder='test_output', scaling = 0.1) -> None:
+    def __init__(self, device, data_in, op_matrices, 
+                 filename, output_folder='output/inference') -> None:
 
         # Initialize a neural network model, an optimizer,
         # and set training parameters.
@@ -23,59 +28,53 @@ class estimator():
         # lr: learning rate
 
         self.device = device
-        self.integrator = integrate(device)
-        self.loss = torch.nn.MSELoss();
-        self.transformer = to_mat(device);
-        self.output_folder = output_folder;
-        self.scaling = scaling;
+        self.filename = filename;
+        self.sampler = sampler(data_in, device);
+        self.n_molecules = len(data_in);
+        self.op_matrices = op_matrices;
+        self.el_dict = {el.symbol: {'Z':el.number,'M':el.mass} for el in elements};
 
         if(not os.path.exists(output_folder)):
             os.mkdir(output_folder);
-    
-    def load(self, filename):
 
-        self.model = V_theta(self.device).to(self.device)
+        return None;
 
-        try:
-            self.model.load_state_dict(torch.load(filename, map_location=torch.device(self.device)));
-        except:
-            res = torch.load(filename, map_location=torch.device(self.device));
-            for key in list(res.keys()):
-                res[key[7:]] = res[key];
-                del res[key];
-            self.model.load_state_dict(res);
+    def get_nuclear_charge(self):
 
-    def set_op_matrices(self, op_matrices):
-        self.op_matrices = op_matrices
+        elements = self.sampler.data_in['elements'];
+        nuclearCharge = [self.el_dict[ele]['Z'] for ele in elements];
+        self.nuclearCharge = torch.tensor(nuclearCharge, dtype=torch.float).to(self.device);
 
-    def solve(self, minibatch, labels, obs_mat, E_nn, data_in,
-              op_names=None, Cmat = [], save_filename='data') -> float:
+        return self.nuclearCharge;
 
-        angstron2Bohr = 1.88973
-        h = labels['h'];
+    def get_centered_pos(self):
 
-        # number of occupied orbitals
-        ne = labels['ne'];
-        nbasis = labels['norbs']
-        nframe = labels['nframe']
-        V_raw = self.model(minibatch);
-
-        V, T, G = self.transformer.raw_to_mat(V_raw,minibatch,labels);
-        V *= self.scaling['V'];
-        T *= self.scaling['T'];
-
-        pred = predict_fns(h, V, ne, nbasis, nframe, self.device);
-
-        with open('H.json','w') as file:
-            json.dump(pred.H.tolist(), file)
-
-        elements = data_in['elements'];
-        nuclearCharge = [1+5*(ele=='C') for ele in elements];
-        nuclearCharge = torch.tensor(nuclearCharge, dtype=torch.float).to(self.device);
-        mass = torch.tensor([1.008 + (12.011-1.008)*(ele=='C') for ele in elements], dtype=torch.float).to(self.device);
-        pos = data_in['pos'];
+        angstron2Bohr = 1.88973;
+        pos = self.sampler.data_in['pos'];
+        elements = self.sampler.data_in['elements'];
+        mass = torch.tensor([self.el_dict[ele]['M'] for ele in elements], 
+                            dtype=torch.float).to(self.device);
         mass_center = torch.sum(pos*mass[None,:,None], axis=1)/torch.sum(mass);
         pos = (pos - mass_center[:,None,:])*angstron2Bohr;
+
+        return pos;
+    
+    def get_multipole(self, op_name):
+
+        pos = self.get_centered_pos();
+        nuclearCharge = self.get_nuclear_charge();
+        moment = torch.tensor([op_name.count('x'),
+                               op_name.count('y'),
+                               op_name.count('z')], dtype=torch.float).to(self.device);
+        multipole = torch.sum(torch.prod(pos**moment[None,None,:],
+                                         axis=2)*nuclearCharge[None,:], axis=1);
+
+        return multipole;
+
+
+    def solve_apply(self, batch_size=1, op_names=[]) -> dict:
+        
+        properties = self.solve(batch_size, op_names);
 
         obj = {};
         obj['C'] = elements.count('C');
@@ -83,19 +82,9 @@ class estimator():
         
         for i, op_name in enumerate(op_names):
 
-            if(op_name == 'E'):
-
-                Ehat = pred.E(E_nn);
-                obj[op_name] = {'Ehat':Ehat.tolist()};
-
             if(op_name in ['x','y','z','xx','yy','zz','xy','xz','yz']):
 
-                moment = torch.tensor([op_name.count('x'),
-                            op_name.count('y'),
-                            op_name.count('z')], dtype=torch.float).to(self.device);
-                multipole = torch.sum(torch.prod(pos**moment[None,None,:],
-                                                 axis=2)*nuclearCharge[None,:], axis=1);
-                
+                multipole = self.get_multipole(op_name);                 
                 O_mat = obs_mat[op_name]
                 Ohat = pred.O(O_mat)
                 Ohat = multipole - Ohat;
@@ -107,121 +96,80 @@ class estimator():
                 Chat = nuclearCharge[None,:]-Chat;
                 obj['atomic_charge'] = {'Chat': Chat.tolist()};
 
-            if(op_name == 'E_gap'):
-
-                Eg_hat = pred.Eg(G);
-                obj['E_gap'] = {'Eg_hat': Eg_hat.tolist()};
-
-            if(op_name == 'bond_order'):
-                    
-                Bhat = pred.B(Cmat);
-                obj['bond_order'] = {'Bhat': Bhat.tolist()};
-            
-            if(op_name == 'alpha'):
-
-                r_mats = torch.stack([obs_mat['x'],
-                                      obs_mat['y'],
-                                      obs_mat['z']]);
-                alpha_hat = pred.alpha(r_mats, T, G);
-                obj['alpha'] = {'alpha_hat': alpha_hat.tolist()};
-
         with open(self.output_folder+'/'+save_filename+'.json','w') as file:
             json.dump(obj,file)
 
-        return Ehat;
+        return obj;
+
+class load_data(dataloader):
+
+    def __init__(self, device, element_list, 
+                 path, starting_basis = 'def2-SVP') -> None:
+
+        dataloader.__init__(device=device, element_list = element_list,
+                            path = path, batch_size = None, 
+                            starting_basis = 'def2-SVP');
+
+    def load(self, filename):
+
+        path_list = [self.path + g + '/basic/' for g in group];
+        fl, partition = self.get_files(path_list, 0, 1);
+        
+        data_in = [];
+        obs_mat = [];
+
+        for file in fl:
+            
+            basic_path = file[0] + file[1];
+            data_in.append(self.read_basic(basic_path));
+            obs_mat.append(self.read_obs_mat());
+
+        return data_in, obs_mat;
 
 
-def load_data(data, device, load_obs_mat = True, op_names = []):
 
-    data_in = [];
-    labels = [];
-    obs_mats = [];
+class sampler(sample_train):
+
+    def __init__(self, data_in, device) -> None:
+
+        sampler_train.__init__(self, data_in, [], device);
     
-    molecules = data['name'];
-    for i,molecule in enumerate(molecules):
-        
-        pos = torch.tensor(data['coordinates'][i]).to(device);
-        pos[:,[0,1,2]] = pos[:,[1,2,0]];
-        elements = data['elements'][i];
+    def sample(self, irreps, op_names=[]):
 
-        ne = int(round(sum([1+5*(ele=='C') for ele in elements])/2));
-        norbs = int(round(sum([5+9*(ele=='C') for ele in elements])));
-        nframe = 1;
+        data = self.data;
 
-        data_in.append({'pos':pos[None,:,:],'elements':elements,
-                    'properties':{'ne':ne, 'norbs':norbs,'nframe':nframe}});
+        elements = [u['elements'] for u in data];
+        natms = [len(u) for u in elements];
+        num_nodes = sum(natms);
 
-        h = torch.tensor(data['h'][i]).to(device);
-        S_mhalf = scipy.linalg.fractional_matrix_power(data['S'][i], (-1/2)).tolist();
-        S_mhalf = torch.tensor([S_mhalf]).to(device);
-        h = torch.matmul(torch.matmul(S_mhalf, h),S_mhalf);
-        
-        label = {'S': torch.tensor([data['S'][i]]).to(device),
-                 'Smhalf': S_mhalf,
-                 'h': h,
-                 'E_nn':torch.tensor([data['Enn'][i]]).to(device)};
-        labels.append(label);
-        integrator = integrate(device);
-
-        data_obs = {}
-        for operator in op_names:
-
-            res = [];
-            res += integrator.calc_O(pos[None,:,:],elements,operator);
-            data_obs[operator] = res;
-
-        obs_mats.append({op: torch.matmul(torch.matmul(S_mhalf,torch.Tensor(data_obs[op]).to(device)),S_mhalf)
-                                                        for op in op_names})
-
-    return data_in, labels, obs_mats;
-
-
-class sampler(object):
-
-    def __init__(self, data_in, labels, device, min_radius: float = 0.5, max_radius: float = 2):
-
-        self.data = data_in;
-        self.labels = labels;
-        self.device = device;
-        self.max_radius = max_radius;
-        self.min_radius = min_radius;
-        self.irreps_sh = o3.Irreps.spherical_harmonics(lmax=2);
-        self.element_embedding = {'H':[0,1],'C':[1,0]};
-
-    def sample(self, batch_size, i_molecule, op_names=[]):
-
-        data = self.data[i_molecule];
-
-        natm = len(data['elements']);
-        nframe = 1;
-        num_nodes = nframe*natm;
-
-        pos = data['pos'].reshape([-1,3]);
-        batch = torch.tensor([0 for i in range(num_nodes)]).to(self.device);
+        pos = torch.vstack([dp['pos'] for dp in data]);
+        batch = torch.cat([torch.tensor([i]*n).to(self.device) for i,n in enumerate(natms)]);
         edge_src, edge_dst = radius_graph(x=pos, r=self.max_radius, batch=batch);
         self_edge = torch.tensor([i for i in range(num_nodes)]).to(self.device);
         edge_src = torch.cat((edge_src, self_edge));
         edge_dst = torch.cat((edge_dst, self_edge));
         edge_vec = pos[edge_src] - pos[edge_dst];
-        num_neighbors = len(edge_src) / num_nodes;
+
+        num_neighbors = self.count(batch, batch[edge_src]);
+
         sh = o3.spherical_harmonics(l = self.irreps_sh, 
                                     x = edge_vec, 
                                     normalize=True, 
                                     normalization='component').to(self.device)
 
         rnorm = edge_vec.norm(dim=1);
-        crit1, crit2 = rnorm<self.max_radius, rnorm>self.min_radius;
-        emb = (torch.cos(rnorm/self.max_radius*torch.pi)+1)/2; 
-        emb = (emb*crit1*crit2 + (~crit2)).reshape(len(edge_src),1);
+        emb = self.radius_embedding(rnorm);
+        f_in = self.element_embedding(elements, irreps);
 
-        f_in = torch.tensor([self.element_embedding[u] for u in data['elements']],
-                            dtype=torch.float).to(self.device);
-        CC_ind = torch.argwhere(f_in[edge_src][:,0]*f_in[edge_dst][:,0]).reshape(-1);
-        HH_ind = torch.argwhere(f_in[edge_src][:,1]*f_in[edge_dst][:,1]).reshape(-1);
-        CH_ind = torch.argwhere(f_in[edge_src][:,0]*f_in[edge_dst][:,1]).reshape(-1);
+        pair_ind = [];
+        nele = irreps.get_input_irreps();
+        for i in range(nele):
+            for j in range(i+1):
+                ind1 = torch.argwhere(f_in[edge_src][:,i]*f_in[edge_dst][:,j]).reshape(-1);
+                pair_ind.append(ind1);
 
-        map1 = [5+9*(ele=='C') for ele in data['elements']];
-        map1 = [sum(map1[:i]) for i in range(len(map1)+1)];
+        map1 = self.get_map(elements, irreps);
+        basis_max = max([dp['norbs'] for dp in data]);
 
         minibatch = {
                      'sh': sh,
@@ -231,19 +179,13 @@ class sampler(object):
                      'edge_dst': edge_dst,
                      'num_nodes': num_nodes,
                      'num_neighbors':num_neighbors,
-                     'HH_ind': HH_ind,
-                     'CH_ind': CH_ind,
-                     'CC_ind': CC_ind
+                     'pair_ind': pair_ind,
+                     'norbs': [dp['norbs'] for dp in data],
+                     'batch': batch,
+                     'map1': map1,
+                     'natm': natms,
+                     'ne': [dp['ne'] for dp in data],
+                     'h': self.get_tensor(data, 'h', basis_max)
                      };
 
-        batch_labels = {
-            'norbs': data['properties']['norbs'],
-            'nframe': 1,
-            'batch': batch,
-            'map1': map1,
-            'natm': natm,
-            'h': self.labels[i_molecule]['h'],
-            'ne': data['properties']['ne']
-            };
-
-        return minibatch, batch_labels;
+        return minibatch;
