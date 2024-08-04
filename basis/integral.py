@@ -14,12 +14,12 @@ from periodictable import elements
 
 class integrate():
 
-    def __init__(self, device, starting_basis):
+    def __init__(self, device, starting_basis, path):
 
         if(starting_basis == 'cc-pVDZ'):
-            filename = 'basis/orbitals_CH.json';
+            filename = path + 'orbitals_CH.json';
         elif(starting_basis == 'def2-SVP'):
-            filename = 'basis/orbitals_new.json';
+            filename = path + 'orbitals_new.json';
         else:
             raise ValueError('The basis set is not supported');
             
