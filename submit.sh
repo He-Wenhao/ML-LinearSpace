@@ -3,13 +3,9 @@
 #SBATCH -C gpu
 #SBATCH -q regular
 #SBATCH -t 24:00:00
-#SBATCH -N 1
-#SBATCH --ntasks-per-node=4
-#SBATCH -c 32
-#SBATCH --gpus-per-task=1
+#SBATCH -N 4
+#SBATCH --gpus=16
 
 module load pytorch/2.1.0-cu12
 
-python3 train_inp.py
-
-#srun --nodes=1 bash torchrun_script.sh
+srun --nodes=4 bash torchrun_script.sh

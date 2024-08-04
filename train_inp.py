@@ -10,24 +10,24 @@ params['OPS'] = {'V':0.01,'E':1,
     'bond_order':0.02, 'alpha':3E-5};
 
 params['device'] = 'cuda:0';
-params['batch_size'] = 4;
+params['batch_size'] = 400;
 params['steps_per_epoch'] = 1;
-params['N_epoch'] = 101;
-params['lr_init'] = 1E-3;
-params['lr_final'] = 1E-3;
-params['lr_decay_steps'] = 50;
+params['N_epoch'] = 2001;
+params['lr_init'] = 5E-3;
+params['lr_final'] = 1E-4;
+params['lr_decay_steps'] = 100;
 params['scaling'] = {'V':1, 'T': 0.01};
-params['Nsave'] = 50;
+params['Nsave'] = 100;
 
 params['element_list'] = ['H','C','N','O','F'];
-params['path'] = '';
-params['datagroup'] = ['group1'];
-params['load_model'] = False;
-params['world_size'] = 1;
+params['path'] = '/pscratch/sd/t/th1543/v2.0/';
+params['datagroup'] = ['group'+str(i) for i in range(8)];
+params['load_model'] = True;
+params['world_size'] = 16;
 params['output_path'] = 'output/';
-params['ddp_mode'] = 'spawn';
+params['ddp_mode'] = 'elastic';
 
-if __name__ == '__main__':
+if(__name__ == '__main__' or params['ddp_mode'] == 'elastic'):
 
     main(params);
 
