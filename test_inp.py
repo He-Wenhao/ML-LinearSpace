@@ -10,7 +10,7 @@ params['OPS'] = {'E':1,
     'bond_order':0.02, 'alpha':3E-5};
 
 params['device'] = 'cuda:0';
-params['batch_size'] = 50;
+params['batch_size'] = 40;
 params['scaling'] = {'V':1, 'T': 0.01};
 params['element_list'] = ['H','C','N','O','F'];
 params['path'] = '/pscratch/sd/t/th1543/v2.0/';
