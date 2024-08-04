@@ -20,7 +20,7 @@ params['scaling'] = {'V':1, 'T': 0.01};
 params['Nsave'] = 20;
 
 params['element_list'] = ['H','C','N','O','F'];
-params['path'] = '/pscratch/sd/t/th1543/v2.0/';
+params['path'] = '';
 params['datagroup'] = ['group'+str(i) for i in range(1)];
 params['load_model'] = True;
 params['world_size'] = 1;
