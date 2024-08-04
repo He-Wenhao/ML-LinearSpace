@@ -14,8 +14,8 @@ params['batch_size'] = 50;
 params['scaling'] = {'V':1, 'T': 0.01};
 params['element_list'] = ['H','C','N','O','F'];
 params['path'] = '/pscratch/sd/t/th1543/v2.0/';
-params['datagroup'] = ['group2'];
+params['datagroup'] = ['group1'];
 params['output_path'] = '/pscratch/sd/t/th1543/v2.0/output/';
-params['model_file'] = '5000_model.pt';
+params['model_file'] = 'QM9_model.pt';
 
 test_func(params);
