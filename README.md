@@ -58,6 +58,7 @@ We include 6 demo scripts in demo/ for training and testing the EGNN model and u
 3.1 Demo for training a model
 
 3.1.1 Serial model training 
+
 The training demo/train_serial/demo_train.py script is shown below:
 ```
 from train import main;
@@ -112,6 +113,7 @@ in the repository folder. The training takes ~10 minutes on a normal Desktop com
 Depending on the random seed, specific numbers can be different, but the decreasing trend of the training loss is expected in all cases.
 
 3.1.2 Model training with distributed data parallel (DDP) 
+
 The training can also be implemented on multiple GPU's or multiple nodes in parallel using the distributed data parallel (DDP) scheme in "demo/train_multigpus/train_inp.py" and "demo/train_multinodes/train_inp.py". The prior uses multiprocessing spawn to launch the DDP training on 4 GPUs in a single node, and the later uses elastic DDP scheme to train on 16 GPUs in 4 nodes. The DDP mode is switched on by simply setting:
 ```
 params['world_size'] = 4;                                 # number of GPUs for parallel training
