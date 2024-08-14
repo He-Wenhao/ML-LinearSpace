@@ -17,7 +17,7 @@ params['OPS'] = {'V':0.01,'E':1,
 
 params['device'] = 'cuda:0';             # device to run the code for serial training. 
                                          # set as 'cpu' for cpu training and 'cuda:0' for gpu training
-params['batch_size'] = 20;              # batch size for training
+params['batch_size'] = 10;              # batch size for training
 params['steps_per_epoch'] = 1;           # number of training steps per epoch
 params['N_epoch'] = 41;                # number of epochs for training
 params['lr_init'] = 5E-3;                # initial learning rate
