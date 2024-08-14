@@ -57,120 +57,100 @@ We include 6 demo scripts in demo/ for training and testing the EGNN model and u
 
 3.1 Demo for training a model
 
-The training demo/demo_train.py script is shown below:
+3.1.1 Serial model training 
+The training demo/train_serial/demo_train.py script is shown below:
 ```
-from mtelect import train_model
-
-# Define the operators and their weights in the training loss
-OPS = {'V':0.1,'E':1,
-    'x':0.2, 'y':0.2, 'z':0.2,
+from train import main;
+import os;
+# This script is used to train the multi-task electronic structure model
+params = {};
+# properties and their weights in the loss function in the training
+# V: regularization term, E: energy,  x,y,z: electric dipole, 
+# xx,yy,zz,xy,yz,xz: electric quadrupole, atomic_charge: atomic charge,
+# E_gap: optical gap, bond_order: bond order, alpha: electric static polarizability 
+params['OPS'] = {'V':0.01,'E':1,
+    'x':0.1, 'y':0.1, 'z':0.1,
     'xx':0.01, 'yy':0.01, 'zz':0.01,
     'xy':0.01, 'yz':0.01, 'xz':0.01,
     'atomic_charge': 0.01, 'E_gap':0.2,
-    'bond_order':0.04, 'alpha':3E-5};
-# Specify the chemical formula for training. Each chemical formula corresponds to a separate file in training dataset.
-molecule_list = ['CH4' ,'C3H8', 'C4H8', 'C7H8', 'C6H12',
-                 'C2H2', 'C4H6','C4H10', 'C5H12', 'C7H10',
-                 'C2H4', 'C3H6','C5H8', 'C6H8', 'C8H8',
-                 'C2H6','C3H4', 'C6H6', 'C5H10', 'C6H14'];
-device = 'cuda:0';     # device to train the model on. Set to 'cpu' to train on CPU
-steps_per_epoch = 10;  # number of training steps per epoch
-N_epoch = 21;         # number of epochs to train for
-lr_init = 1E-2;        # initial learning rate
-lr_final = 1E-3;       # final learning rate
-lr_decay_steps = 5;    # number of epochs to decay the learning rate  
-scaling = {'V':0.2, 'T': 0.01};   # scaling factors for the neural network output
-                                           # for V_theta, screening matrix T, and bandgap corrector G
-Nsave = 50;      # number of epochs between saving the model
-batch_size = 1;  # number of configurations from each chemical formula for training
-path = 'data/';  # path to training data
-
-world_size = 1;  # number of GPUs to train on. Set to 1 to train on a single GPU or CPU
-rank = 0;        # rank of the current GPU. Set to 0 for single GPU or CPU training
-
-params = {'OPS':OPS, 'molecule_list':molecule_list, 'device':device,
-            'steps_per_epoch':steps_per_epoch, 'N_epoch':N_epoch,
-            'lr_init':lr_init, 'lr_final':lr_final, 'lr_decay_steps':lr_decay_steps,
-            'scaling':scaling, 'Nsave':Nsave, 'batch_size':batch_size, 'path':path,
-            'world_size':world_size, 'rank':rank};
-
-train_model(params);
+    'bond_order':0.02, 'alpha':3E-5};
+params['device'] = 'cuda:0';             # device to run the code for serial training. 
+                                         # set as 'cpu' for cpu training and 'cuda:0' for gpu training
+params['batch_size'] = 20;              # batch size for training
+params['steps_per_epoch'] = 1;           # number of training steps per epoch
+params['N_epoch'] = 41;                # number of epochs for training
+params['lr_init'] = 5E-3;                # initial learning rate
+params['lr_final'] = 1E-4;               # final learning rate
+params['lr_decay_steps'] = 10;          # number of steps for learning rate decay
+params['scaling'] = {'V':1, 'T': 0.01};  # scaling factors for the neural network correction terms. 
+                                         # V: Hamiltonian correction, T: screening matrix for polarizability.
+                                         # should the same as the scaling factors used in the model training.
+params['Nsave'] = 10;                   # number of epochs to save the model
+params['element_list'] = ['H','C','N','O','F'];           # list of elements in the dataset
+                                                          # should be the same as the element_list used in the model training
+params['path'] = os.getcwd() +'/';                        # path to the package directory
+params['datagroup'] = ['group_train']; # list of data groups for training
+params['load_model'] = False;                             # load the pre-trained model
+params['world_size'] = 1;                                 # number of GPUs for parallel training
+params['output_path']= os.getcwd()+'/output/';            # output path for the training results
+params['ddp_mode'] = 'serial';                            # distributed data parallel mode for training
+                                                          # set as 'serial','spawn','elastic' for serial, multiprocessing spawn, and elastic ddp modes
+if(__name__ == '__main__' or params['ddp_mode'] == 'elastic'):
+    main(params);
 ```
-A small training dataset is in the "data" folder, including starting-point DFT Hamiltonian and CCSD(T) labels of 23 molecules at equilibrium configuration. The above script can be launched by the following commands:
+A small training dataset is in the "dataset/group_train/" folder, including starting-point DFT Hamiltonian and CCSD(T) labels of 60 molecules in the QM9 database at equilibrium configuration. The above script can be launched by the following commands:
 ```
-cd demo
-cp demo_train.py ../
-cd ../
-python3 demo_train.py
+cd demo/train_serial/
+cp train_inp.py ../../
+cd ../../
+python3 train_inp.py
 ```
-In the repository folder. The training takes 15~20 minutes on a normal Desktop computer. Running the program writes the loss data into the loss_0.txt file and output the trained model as "model.pt". Two additional files named "10_model.pt" and "20_model.pt" are saved as checkpoints at the 10 and 20 epoch, respectively. The loss data looks as below, including the mean square error loss of all trained quantities (V: the $\parallel V_\theta\parallel^2$ regularization, E: energy, x/y/z:different components of electric dipole moments, xx/yy/zz/xy/yz/xz: different components of electric quadrupole moments, atomic_charge: Mulliken atomic charge, bond_order: Mayer bond order, alpha: static electric polarizability)
+in the repository folder. The training takes ~10 minutes on a normal Desktop computer. Running the program writes the loss data into the output/loss/loss_0.txt file and output the trained model named "10_model.pt", ..., "40_model.pt" saved as checkpoints at the 10, 20, 30, and 40th epoch, respectively. The loss data looks as below, including the mean square error loss of all trained quantities (V: the $\parallel V_\theta\parallel^2$ regularization, E: energy, x/y/z:different components of electric dipole moments, xx/yy/zz/xy/yz/xz: different components of electric quadrupole moments, atomic_charge: Mulliken atomic charge, bond_order: Mayer bond order, alpha: static electric polarizability)
 
 ![image](https://github.com/user-attachments/assets/5570cdf5-5e0e-4249-9e1e-78ec303cca98)
 
 Depending on the random seed, specific numbers can be different, but the decreasing trend of the training loss is expected in all cases.
 
-The training can also be implemented on multiple GPU's in parallel using the distributed data parallel (DDP) scheme in "demo/demo_parallel.py". The DDP version of the training script is shown below:
+3.1.2 Model training with distributed data parallel (DDP) 
+The training can also be implemented on multiple GPU's or multiple nodes in parallel using the distributed data parallel (DDP) scheme in "demo/train_multigpus/train_inp.py" and "demo/train_multinodes/train_inp.py". The prior uses multiprocessing spawn to launch the DDP training on 4 GPUs in a single node, and the later uses elastic DDP scheme to train on 16 GPUs in 4 nodes. The DDP mode is switched on by simply setting:
 ```
-from mtelect import train_model
-import torch.distributed as dist
-import torch.multiprocessing as mp
-from torch.nn.parallel import DistributedDataParallel as DDP
-import os;
-
-def run(rank, world_size):
-
-    # set environment and create default process group
-    os.environ['MASTER_ADDR'] = 'localhost'
-    os.environ['MASTER_PORT'] = '12355'
-    dist.init_process_group("gloo", rank=rank, world_size=world_size)
-    
-    OPS = {'V':0.1,'E':1,
-       'x':0.2, 'y':0.2, 'z':0.2,
-       'xx':0.01, 'yy':0.01, 'zz':0.01,
-       'xy':0.01, 'yz':0.01, 'xz':0.01,
-       'atomic_charge': 0.01, 'E_gap':0.2,
-       'bond_order':0.02, 'alpha':3E-5};  # Define the operators and their weights in the training loss
-    
-    device = 'cuda:'+str(rank);  # device to train the model on for the current process
-    batch_size = 1;              # number of configurations from each chemical formula for training
-    steps_per_epoch = 10;        # number of training steps per epoch
-    N_epoch = 21;                # number of epochs to train for
-    lr_init = 1E-2;              # initial learning rate
-    lr_final = 1E-3;             # final learning rate
-    lr_decay_steps = 50;         # number of epochs to decay the learning rate
-    scaling = {'V':0.2, 'T': 0.01};  # scaling factors for the neural network output
-                                     # for V_theta and screening matrix T
-    Nsave = 10;             # number of epochs between saving the model
-    path = 'data/';         # path to training data
-    # Specify the chemical formula for training.
-    # Chemical formula are separated into 4 groups for parallel training on 4 GPUs.
-    molecule_list = [['CH4' ,'C3H8', 'C4H8', 'C7H8', 'C6H12'],
-                     ['C2H2', 'C4H6','C4H10', 'C5H12', 'C7H10'],
-                     ['C2H4', 'C3H6','C5H8', 'C6H8', 'C8H8'],
-                     ['C2H6','C3H4', 'C6H6', 'C5H10', 'C6H14']]; 
-
-    params = {'OPS':OPS, 'molecule_list':molecule_list, 'device':device,
-            'steps_per_epoch':steps_per_epoch, 'N_epoch':N_epoch,
-            'lr_init':lr_init, 'lr_final':lr_final, 'lr_decay_steps':lr_decay_steps,
-            'scaling':scaling, 'Nsave':Nsave, 'batch_size':batch_size, 'path':path,
-            'world_size':world_size, 'rank':rank};
-    
-    # train the model
-    train_model(params);
-
-if __name__=="__main__":
-
-    world_size = 4;  # number of GPUs to train on
-    mp.spawn(run,
-        args=(world_size,),
-        nprocs=world_size,
-        join=True)   # spawn 4 processes for parallel training on 4 GPUs
+params['world_size'] = 4;                                 # number of GPUs for parallel training
+params['ddp_mode'] = 'spawn';                            # distributed data parallel mode for training
 ```
-This script run the same training on 4 GPU's in parallel. This calculation takes about 5 min on the NERSC perlmutter GPU node with 4 Nvidia A100 40 GB GPUs https://docs.nersc.gov/systems/perlmutter/architecture/. If your device has a different number of GPUs, change "world_size" accordingly. Note that in the current version, molecules trained on each process must be manually separated by setting "molecule_list", and each process contains the same number of data files. Each process will output a loss file (loss_0,1,2,3.txt) including the MAE loss for data within the process. The total loss is then the averate of values in the four files.
+for the first case. Launching the calculation in the same way as the serial version, the script will implement the same training on 4 GPU's in parallel. This calculation takes about 5 min on the NERSC perlmutter GPU node with 4 Nvidia A100 40 GB GPUs https://docs.nersc.gov/systems/perlmutter/architecture/. If your device has a different number of GPUs, change "world_size" accordingly. Note that in the current version, molecules trained on each process are separated automatically, and each process contains rawly the same number of molecules. Each process will output a loss file (loss_0,1,2,3.txt) into output/loss/ folder including the MAE loss for data within the process. The total loss is then the averate of values in the four files.
 
-3.2 Demo for using our pre-trained model 
+In the second case, we show how to conduct large scale training. The input script is changed as below:
+```
+params['world_size'] = 16;                                 # number of GPUs for parallel training
+params['ddp_mode'] = 'elastic';                            # distributed data parallel mode for training
+params['datagroup'] = ['group'+str(i) for i in range(10)]; # list of data groups for training.
+                                                           # Provide training data in dataset/group0,1,2,.../ accordingly
+```
+together with a separate script demo/train_multinodes/torchrun_script.sh:
+```
+export MASTER_ADDR=$(scontrol show hostname ${SLURM_NODELIST} | head -n 1)
+export OMP_NUM_THREADS=1
+torchrun --nnodes=4 --nproc_per_node=4 --rdzv_id=100 --rdzv_backend=c10d --rdzv_endpoint=$MASTER_ADDR:29400 train_inp.py
+```
+Such training is usually submitted to high-performance computing systems. We provide an example script demo/train_multinodes/submit.sh for slurm submission on NERSC Perlmutter, in which the training is launched by command:
+```
+demo/train_multinodes/torchrun_script.sh
+```
+The training is launched by the following command:
+```
+cd demo/train_multinodes/
+cp train_inp.py torchrun_script.sh submit.sh ../../
+cd ../../
+sbatch submit.sh
+```
 
-Our pre-trained model "EGNN_hydrocarbon_model.pt" is also included in the repository. In order to use the model to calculate new systems, the model inference script is shown below:
+3.2 Demo for testing a pre-trained model 
+
+Our pre-trained model "output/model/QM9_model.pt" is also included in the repository. To test the model performance on a 
+
+3.3 Demo for using a pre-trained model to predict new molecules
+
+In order to use the model to calculate new systems, the model inference script is shown below:
 
 ```
 from mtelect import infer
