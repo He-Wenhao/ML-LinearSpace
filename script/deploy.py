@@ -16,6 +16,7 @@ device = 'cpu';
 scaling = {'V':0.2, 'T': 0.01};
 
 path = '/path/to/data/';
+starting_basis = 'cc-pVDZ';
 
 OPS = {'V':0.1,'E':1,
        'x':0.1, 'y':0.1, 'z':0.1,
@@ -32,10 +33,10 @@ with open(path + 'B2_data.json','r') as file:
     data1 = json.load(file);
 molecule_list = data1['name'];
 
-est = estimator(device, scaling = scaling);
+est = estimator(device, starting_basis = starting_basis, scaling = scaling);
 est.load('EGNN_hydrocarbon_model.pt');
 
-data, labels, obs_mat = load_data(data1, device, op_names=operators_electric);
+data, labels, obs_mat = load_data(data1, device, starting_basis=starting_basis, op_names=operators_electric);
 
 tl = [];
 sampler1 = sampler(data, labels, device);
