@@ -139,7 +139,10 @@ class estimator(estimator_test):
                 if(op_name == 'E'):
                         
                     hartree_to_kcalmol = 627.509;
-                    properties[op_name] = [Ei*hartree_to_kcalmol for Ei in properties[op_name]];
+                    res = [];
+                    for i1, Ei in enumerate(properties[op_name]):
+                        res.append((Ei+self.sampler.data[ind[i1]]['E_nn'])*hartree_to_kcalmol);
+                    properties[op_name] = res;
                 
                 if(op_name == 'bond_order'):
 
