@@ -186,7 +186,7 @@ cp test_inp.py ../../
 cd ../../
 python3 test_inp.py
 ```
-The calculation takes
+The calculation takes about 1 minutes in a normal computer. The results are output to "output/test/test.json". The json file includes a dictionary with keys 'E' ,'x', 'y', 'z', 'xx', 'yy', 'zz', 'xy', 'yz', 'xz', 'atomic_charge', 'E_gap', 'bond_order', 'alpha'. Each key corresponds to a value {'pred':[...], 'label':[...]}, where 'pred' and 'label' includes lists of the predicted results and coupled-cluster results, respectively.
 
 3.3 Demo for using a pre-trained model to predict new molecules
 
