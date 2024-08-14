@@ -14,6 +14,8 @@ torch_cluster==1.6.3
 torch_scatter==2.1.2
 e3nn==0.5.1
 sympy==1.13.0
+periodictable==1.7.0
+pyscf==2.6.2
 
 nvidia-dali-cuda120==1.35.0  (required for using GPU in the calculation)
 
@@ -36,20 +38,22 @@ pip install torch-cluster -f https://data.pyg.org/whl/torch-2.1.0+cu121.html
 pip install torch-scatter -f https://data.pyg.org/whl/torch-2.1.0+cu121.html
 pip install --upgrade e3nn
 pip install sympy
+pip install periodictable
+pip install --prefer-binary pyscf
 ```
 After installing the dependent packages, download this code package:
 ```
-git clone https://github.com/htang113/Multi-task-electronic
+git clone https://github.com/htang113/ML_electronic/
 ```
 Finally enter the working folder and install the package:
 ```
-cd Multi-task-electronic
+cd ML_electronic
 pip install .
 ```
 
 3. Demo
 
-We include 3 demo scripts in demo/ for training the EGNN model and using our pre-trained model to calculate molecular properties. 
+We include 6 demo scripts in demo/ for training and testing the EGNN model and using a pre-trained model to calculate molecular properties. 
 
 3.1 Demo for training a model
 
