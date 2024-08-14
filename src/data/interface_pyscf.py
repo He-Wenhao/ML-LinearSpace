@@ -110,14 +110,17 @@ class generate_basic:
         
         E_nn = mol.energy_nuc()
         ne = mol.tot_electrons()
+
         h += (-np.sum(scipy.linalg.eigvalsh(h,S)[:int(ne/2)])*2 + calc.e_tot - E_nn)/ne*S;
         
         Smhalf = torch.tensor(scipy.linalg.fractional_matrix_power(S, (-1/2)),
                                 dtype=torch.float).to(self.device);
         S = torch.tensor(S, dtype=torch.float).to(self.device);
         h = torch.tensor(h, dtype=torch.float).to(self.device);
+        h = torch.matmul(torch.matmul(Smhalf, h),Smhalf);
         perm_mat = torch.tensor(self.get_perm_mat(mol), 
                                 dtype=torch.float).to(self.device);
+        pos = np.array(pos)[:,[1,2,0]].tolist();
 
         data_in = {}
         data_in['elements'] = elements;
