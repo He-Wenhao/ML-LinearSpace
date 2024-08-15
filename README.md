@@ -57,7 +57,7 @@ We include 6 demo scripts in demo/ for training and testing the EGNN model and u
 
 # 3.1 Demo for training a model
 
-3.1.1 Serial model training 
+## 3.1.1 Serial model training 
 
 The training demo/train_serial/demo_train.py script is shown below:
 ```
