@@ -291,6 +291,7 @@ pos = [[0.000000, 0.000000, 0.000000],
 name = 'methane';                         # name of the molecule
 properties = pyscf_func(params, elements, pos, name); # infer the properties of molecules
 ```
+The script calculate properties of a methane molecule whose atomic species and coordinates are directly defined in the script as "elements" and "pos". The function pyscf_func takes related settings and molecular properties as input and output the predicted properties into file 'output/inference/methane.json' in the same format as the orca inference output. Note that all input information for the PySCF script is atomic species and coordinates, and the starting point DFT will be calculated using PySCF within our package.
 
 4. Instructions for use
 
@@ -313,33 +314,14 @@ This version of the code does not support systems with elements other than carbo
 
 In order to apply a pre-trained EGNN model to a user-defined molecule other than the molecules in our demo data files, user needs to generate the input data file for the EGNN model. This can be realized in two ways. Here we describe the first way, using software ORCA to generate the input. Alternatively, one can use PySCF to generate the input, which will be described in the next section. The advantage of using ORCA to generate input is that  ORCA is a pre-compiled package, so it is fast when calculating large system compared with PySCF. 
 
-Users first need to run a ORCA DFT calculation using the fast-to-evaluate functional BP86 with a medium-sized cc-pVDZ basis set. This calculation is fast for systems up to hundreds of atoms. An example ORCA calculation is shown in "interface/orca/orca_folder/". Atomic structure is defined in the ORCA input script "run.inp", which also contained other DFT parameters (please keep these parameters unchanged. Just replace the configuration into the one you want to calculate). After ORCA is installed, one can launch the ORCA calculation by:
+Users first need to run a ORCA DFT calculation using the fast-to-evaluate functional BP86 with a medium-sized def2-SVP basis set. This calculation is fast for systems up to hundreds of atoms. An example ORCA calculation is shown in "demo/infer_orca/orca_folder". Atomic structure is defined in the ORCA input script "run.inp", which also contained other DFT parameters (please keep these parameters unchanged. Just replace the configuration into the one you want to calculate). After ORCA is installed, one can launch the ORCA calculation by:
 ```
-cd interface/orca/orca_folder
+cd demo/infer_orca/orca_folder
 /path/to/orca/orca run.inp >log
 ```
-The calculation outputs information to the file "log". Then, run the script "interface/orca/read.py":
+One can also utilize the parallel computing feature of ORCA and submit the calculation to slurm system. Please see ORCA tutorials (https://www.faccts.de/docs/orca/5.0/tutorials/, https://sites.google.com/site/orcainputlibrary/) for efficient ways to implement large DFT calculations in the software. The calculation outputs information to the file "log". Then, run the script "demo/infer_orca/orca_folderread.py":
 ```
-import json;
-from mtelect import QM_reader;
 
-path = 'orca_folder/';   # Path of ORCA calculation results
-system = 'system';  # Name of the system. Used just in labeling outputs.
-
-reader = QM_reader(path);     
-ne = reader.read_ne('');
-HF_dic = reader.read_HF('');
-matrix_dic = reader.read_matrix('');
-
-output = {};
-for key in HF_dic:
-    output[key] = [HF_dic[key]];
-for key in matrix_dic:
-    output[key] = [matrix_dic[key]];
-output['name'] = [system];
-
-with open(path + system + '_data.json','w') as file:
-    json.dump(output, file);
 ```
 Consider reset system into a name that identify the molecule you want to calculate. The script is launched by 
 ```
