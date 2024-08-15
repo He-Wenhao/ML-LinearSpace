@@ -108,7 +108,7 @@ python3 train_inp.py
 ```
 in the repository folder. The training takes ~10 minutes on a normal Desktop computer. Running the program writes the loss data into the output/loss/loss_0.txt file and output the trained model named "10_model.pt", ..., "40_model.pt" saved as checkpoints at the 10, 20, 30, and 40th epoch, respectively. The loss data looks as below, including the mean square error loss of all trained quantities (V: the $\parallel V_\theta\parallel^2$ regularization, E: energy, x/y/z:different components of electric dipole moments, xx/yy/zz/xy/yz/xz: different components of electric quadrupole moments, atomic_charge: Mulliken atomic charge, bond_order: Mayer bond order, alpha: static electric polarizability)
 
-![image](https://github.com/user-attachments/assets/5570cdf5-5e0e-4249-9e1e-78ec303cca98)
+![image](https://github.com/user-attachments/assets/9404599e-da94-4312-bda7-5ae88ca61d23)
 
 Depending on the random seed, specific numbers can be different, but the decreasing trend of the training loss is expected in all cases.
 
@@ -194,7 +194,7 @@ We provide interfaces with electronic structure code ORCA and PySCF to use the m
 
 3.3.1 Inference interface with ORCA
 
-In order to use the model to calculate new systems, the model inference script is shown below:
+In order to use the model to calculate new systems, the model inference script "demo/infer_orca/infer_inp.py" is shown below:
 
 ```
 from deploy import infer_func;
@@ -267,7 +267,30 @@ data["alpha"][i]  # static electric polarizability in atomic unit (3x3 nested li
 Note that the local DFT starting point from ORCA is already provided in this demo. If the user want to use the ORCA interface to study new molecules, it is necessary to implement ORCA DFT calculations and prepare the data file in the same format as "dataset/group_infer/basic/". Detailed instructions on how to prepare the data is elaborated in section 4.2.
 
 3.3.2 Inference interface with PySCF
-
+The model inference script interface with PySCF "demo/infer_pyscf/pyscf_inp.py" is shown below:
+```
+from deploy import pyscf_func;
+import os;
+# This script is used to apply a pre-trained multi-task electronic structure model to infer properties of molecules
+params = {};
+params['device'] = 'cuda:0'; # device to run the code for calculations in the inference.
+params['scaling'] = {'V':1, 'T': 0.01};         # scaling factors for the neural network correction terms.
+                                                # V: Hamiltonian correction, T: screening matrix for polarizability.
+                                                # should the same as the scaling factors used in the model training.
+params['element_list'] = ['H','C','N','O','F']; # list of elements in the dataset
+                                                # should be the same as the element_list used in the model training
+params['path'] = os.getcwd() +'/';              # path to the package directory
+params['output_path']= os.getcwd()+'/output/';  # output path for the inference results
+params['model_file'] = 'QM9_model.pt';         # model file for inference
+elements = ['C','H','H','H','H'];         # list of elements in the molecule
+pos = [[0.000000, 0.000000, 0.000000],
+       [0.000000, 0.000000, 1.089000],
+       [1.026719, 0.000000, -0.363000],
+       [-0.513360, -0.889165, -0.363000],
+       [-0.513360, 0.889165, -0.363000]]; # list of atomic positions in the molecule (Angstrom)
+name = 'methane';                         # name of the molecule
+properties = pyscf_func(params, elements, pos, name); # infer the properties of molecules
+```
 
 4. Instructions for use
 
