@@ -179,78 +179,95 @@ params['output_path']= os.getcwd()+'/output/';                # output path for 
 params['model_file'] = 'QM9_model.pt';                       # model file for testing
 test_func(params);  # test the model
 ```
-Implement the testing by commands below:
+The code test the model by example data in folder "dataset/group_test/". Implement the testing by commands below:
 ```
 cd demo/test/
 cp test_inp.py ../../
 cd ../../
 python3 test_inp.py
 ```
-The calculation takes about 1 minutes in a normal computer. The results are output to "output/test/test.json". The json file includes a dictionary with keys 'E' ,'x', 'y', 'z', 'xx', 'yy', 'zz', 'xy', 'yz', 'xz', 'atomic_charge', 'E_gap', 'bond_order', 'alpha'. Each key corresponds to a value {'pred':[...], 'label':[...]}, where 'pred' and 'label' includes lists of the predicted results and coupled-cluster results, respectively.
+The calculation takes about 1 minutes in a normal computer. The results are output to "output/test/test.json". The json file includes a dictionary with keys 'E' (energy, hartree),'x', 'y', 'z' (- electronic dipole moment a.u.), 'xx', 'yy', 'zz', 'xy', 'yz', 'xz' (- electronic quadrupole moment to mass center a.u.), 'atomic_charge' (electron population, e), 'E_gap' (verticle optical gap, hartree), 'bond_order' (bond order, [(atom index 1, atom index 2, bond order), ...]), 'alpha' (static electric polarizability). Each key corresponds to a value {'pred':[...], 'label':[...]}, where 'pred' and 'label' includes lists of the predicted results and coupled-cluster results, respectively. The root-mean-square error can then be straight-forwardly calculated from the output test.json file.
 
 3.3 Demo for using a pre-trained model to predict new molecules
+
+We provide interfaces with electronic structure code ORCA and PySCF to use the model in predictions of user-defined molecules. The most convenient way to use the model is by the built-in PySCF interface (3.3.2), which we recommend if the studied molecule contains less than 100 atoms. If user wants to evaluate very large molecules or evaluate one molecule repeatedly with different models, we recommend the ORCA interface, where users prepare starting-point DFT data into files and call the model to do neural network corrections.
+
+3.3.1 Inference interface with ORCA
 
 In order to use the model to calculate new systems, the model inference script is shown below:
 
 ```
-from mtelect import infer
-
-device = 'cpu';  # device to run the inference calculation on
-scaling = {'V':0.2, 'T': 0.01};  # scaling factors for the neural network output. 
-                                 # should be set the same as in the training script
-data_path = 'data/aromatic_20_PA_data.json';  # path to the data file of molecule to predict
-model_path = 'models/EGNN_hydrocarbon_model.pt';  # path to the pre-trained model
-output_path = 'output/';  # path to save the output files
-
-OPS = ['E','x', 'y', 'z', 'xx', 'yy', 'zz', 'xy', 'yz', 'xz',
-       'atomic_charge', 'E_gap', 'bond_order', 'alpha'];      # list of operators to predict
-
-params = {'device':device, 'scaling':scaling, 'data_path':data_path,
-          'model_path':model_path, 'OPS':OPS, 'output_path':output_path};
-
-infer(params);
+from deploy import infer_func;
+import os;
+# This script is used to apply a pre-trained multi-task electronic structure model to infer properties of molecules
+params = {};
+# properties to be inferred.
+# V: regularization term, E: energy,  x,y,z: electric dipole,
+# xx,yy,zz,xy,yz,xz: electric quadrupole, atomic_charge: atomic charge,
+# E_gap: optical gap, bond_order: bond order, alpha: electric static polarizability
+# The weights are not used in the inference
+params['OPS'] = {'E':1,
+    'x':0.1, 'y':0.1, 'z':0.1,
+    'xx':0.01, 'yy':0.01, 'zz':0.01,
+    'xy':0.01, 'yz':0.01, 'xz':0.01,
+    'atomic_charge': 0.01, 'E_gap':0.2,
+    'bond_order':0.02, 'alpha':3E-5};
+params['device'] = 'cuda:0'; # device to run the code for calculations in the inference.
+params['batch_size'] = 4;    # batch size for inference
+params['scaling'] = {'V':1, 'T': 0.01};         # scaling factors for the neural network correction terms.
+                                                # V: Hamiltonian correction, T: screening matrix for polarizability.
+                                                # should the same as the scaling factors used in the model training.
+params['element_list'] = ['H','C','N','O','F']; # list of elements in the dataset
+                                                # should be the same as the element_list used in the model training
+params['path'] = os.getcwd() +'/';              # path to the package directory
+params['datagroup'] = ['group_infer'];          # list of data groups for inference
+params['output_path']= os.getcwd()+'/output/';  # output path for the inference results
+params['model_file'] = 'QM9_model.pt';         # model file for inference
+infer_func(params); # infer the properties of molecules
 ```
 Running the inference script by:
 ```
-cd demo
-cp demo_inference.py ../
-cd ../
-python3 demo_inference.py
+cd demo/infer_orca
+cp infer_inp.py ../../
+cd ../../
+python3 infer_inp.py
 ```
-The script reads the molecule data from data/aromatic_20_PA_data.json, which includes the information of the molecule indexed as number 20 in https://pubs.acs.org/doi/10.1021/cr990324%2B. Data files of molecules with index number 19,21,22,23 in the same paper and cyclic polyacetylene ("data/cyclic_PA_data.json") C$_{66}$H$_{66}$ are also included in the demo dataset for users to try. Running the script generates a folder "output/" and write two files "20.json" including all predicted properties and "20_H.json" including the corrected effective Hamiltonian by our EGNN. The predicted properties can be readout by simply loading the json file:
+The script reads the molecule data from "dataset/group_infer/basic/", which includes the starting-point information of 4 example molecules in the QM9 database. Running the script writes all predicted properties by our EGNN to folder output/inference/inference.json. The predicted properties can be readout by simply loading the json file:
 ```
 import json;
 
-filename = 'output/20.json'
+filename = 'output/inference/inference.json'
 with open(filename,'r') as file:
     data = json.load(file);
-
-data["C"]  # number of carbon atoms
-data["H"]  # number of hydrogen atoms
-data["E"]["Ehat"][0] # energy of the molecule in Hartree
+i = 0      # the index (ith) of molecule in the calculation
+data["name"][i] # name of the molecule file 
+data["E"][i]  # total energy of the molecule in kcal/mol
 
 # electric dipole moment vector reference to the molecule mass center in atomic unit
-data["x"]["Ohat"][0]  # px
-data["y"]["Ohat"][0]  # py
-data["z"]["Ohat"][0]  # pz
+data["x"][i]  # px
+data["y"][i]  # py
+data["z"][i]  # pz
 
 # electric quadrupole moment tensor reference to the molecule mass center in atomic unit
-data["xx"]["Ohat"][0]  # Qxx
-data["yy"]["Ohat"][0]  # Qyy
-data["zz"]["Ohat"][0]  # Qzz
-data["xy"]["Ohat"][0]  # Qxy
-data["xz"]["Ohat"][0]  # Qxz
-data["yz"]["Ohat"][0]  # Qyz
+data["xx"][i]  # Qxx
+data["yy"][i]  # Qyy
+data["zz"][i]  # Qzz
+data["xy"][i]  # Qxy
+data["xz"][i]  # Qxz
+data["yz"][i]  # Qyz
 
 # list of Mulliken atomic charges in atomic unit (length = number of atoms)
-data["atomic_charge"]["Chat"][0]  # charge of the atom
-# 2D nested list of Mayer bond orders (number of atoms x number of atoms)
-data["bond_order"]["Bhat"][0]  # bond order between atom i and atom j
+data["atomic_charge"][i]  # charge of the atom
+# 2D nested list of Mayer bond orders (number of bonds x 3)
+data["bond_order"][i]  # bond order Bij between atom i and atom j as a 3-elements tuple: (i, j, Bij)
 
-data["E_gap"]["Eg_hat"][0]  # optical gap in Hartree
-data["alpha"]["alpha_hat"][0]  # static electric polarizability in atomic unit (3x3 nested list)
-
+data["E_gap"][i]  # optical gap in eV
+data["alpha"][i]  # static electric polarizability in atomic unit (3x3 nested list)
 ```
+Note that the local DFT starting point from ORCA is already provided in this demo. If the user want to use the ORCA interface to study new molecules, it is necessary to implement ORCA DFT calculations and prepare the data file in the same format as "dataset/group_infer/basic/". Detailed instructions on how to prepare the data is elaborated in section 4.2.
+
+3.3.2 Inference interface with PySCF
+
 
 4. Instructions for use
 
@@ -315,6 +332,3 @@ Then you can use the demo_inference.py script to calculate your system by just r
 data_path = 'data/system_data.json'
 ```
 
-4.3 Applying pre-trained model to user-defined system: PySCF interface
-
-Available soon ...
