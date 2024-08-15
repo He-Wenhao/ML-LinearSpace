@@ -1,7 +1,7 @@
 # Multi-task-electronic
 This package provides a python realization of the multi-task EGNN (equivariant graph neural network) for molecular electronic structure described in the paper "Multi-task learning for molecular electronic structure approaching coupled-cluster accuracy".
 
-1. System requirements
+# 1. System requirements
 
 The package works in Linux and Windows systems. The following packages need to be installed in advance:
 
@@ -21,7 +21,7 @@ nvidia-dali-cuda120==1.35.0  (required for using GPU in the calculation)
 
 Note that in most cases, different version of packages should also work. We list exactly the versions in our calculations in case version inconsistency issue occurs. If users intend to run the program on a cpu device, the cuda package is not needed.
 
-2. Installation
+# 2. Installation
 
 First, create a python virtual environment:
 ```
@@ -51,11 +51,11 @@ cd ML_electronic
 pip install .
 ```
 
-3. Demo
+# 3. Demo
 
 We include 6 demo scripts in demo/ for training and testing the EGNN model and using a pre-trained model to calculate molecular properties. 
 
-3.1 Demo for training a model
+# 3.1 Demo for training a model
 
 3.1.1 Serial model training 
 
@@ -146,7 +146,7 @@ cd ../../
 sbatch submit.sh
 ```
 
-3.2 Demo for testing a pre-trained model 
+# 3.2 Demo for testing a pre-trained model 
 
 Our pre-trained model "output/model/QM9_model.pt" is also included in the repository. To test the model performance on a molecule dataset with both starting-point information and coupled-cluster results, script "demo/test/test_inp.py" is shown below:
 ```
@@ -188,7 +188,7 @@ python3 test_inp.py
 ```
 The calculation takes about 1 minutes in a normal computer. The results are output to "output/test/test.json". The json file includes a dictionary with keys 'E' (energy, hartree),'x', 'y', 'z' (- electronic dipole moment a.u.), 'xx', 'yy', 'zz', 'xy', 'yz', 'xz' (- electronic quadrupole moment to mass center a.u.), 'atomic_charge' (electron population, e), 'E_gap' (verticle optical gap, hartree), 'bond_order' (bond order, [(atom index 1, atom index 2, bond order), ...]), 'alpha' (static electric polarizability). Each key corresponds to a value {'pred':[...], 'label':[...]}, where 'pred' and 'label' includes lists of the predicted results and coupled-cluster results, respectively. The root-mean-square error can then be straight-forwardly calculated from the output test.json file.
 
-3.3 Demo for using a pre-trained model to predict new molecules
+# 3.3 Demo for using a pre-trained model to predict new molecules
 
 We provide interfaces with electronic structure code ORCA and PySCF to use the model in predictions of user-defined molecules. The most convenient way to use the model is by the built-in PySCF interface (3.3.2), which we recommend if the studied molecule contains less than 100 atoms. If user wants to evaluate very large molecules or evaluate one molecule repeatedly with different models, we recommend the ORCA interface, where users prepare starting-point DFT data into files and call the model to do neural network corrections.
 
@@ -293,9 +293,9 @@ properties = pyscf_func(params, elements, pos, name); # infer the properties of 
 ```
 The script calculate properties of a methane molecule whose atomic species and coordinates are directly defined in the script as "elements" and "pos". The function pyscf_func takes related settings and molecular properties as input and output the predicted properties into file 'output/inference/methane.json' in the same format as the orca inference output. Note that all input information for the PySCF script is atomic species and coordinates, and the starting point DFT will be calculated using PySCF within our package.
 
-4. Instructions for use
+# 4. Instructions for use
 
-4.1 model training with large dataset
+# 4.1 model training with large dataset
 
 In our paper, the model is trained on a much larger training dataset than the demo case. The dataset includes about 5 times more molecules and about 500 times more configurations. Each molecule has about 100 vibrational configurations, so that the model can capture electronic interaction when the system deviates from equilibrium configurations. However, as the filesize exceeds the limit of a Github repository, we cannot put the whole training dataset here. The dataset is available upon reasonable request to authors of the paper (haot@mit.edu, haoweixu@mit.edu, liju@mit.edu).
 
@@ -310,7 +310,7 @@ Users can also create their own dataset for training. We provide data processing
 
 This version of the code does not support systems with elements other than carbon and hydrogen yet, but a new version will be available soon that support arbitrary elements defined by user inputs.
 
-4.2 Applying pre-trained model to user-defined system: orca interface
+# 4.2 Applying pre-trained model to user-defined system: orca interface
 
 In order to apply a pre-trained EGNN model to a user-defined molecule other than the molecules in our demo data files, user needs to generate the input data file for the EGNN model. This can be realized in two ways. Here we describe the first way, using software ORCA to generate the input. Alternatively, one can use PySCF to generate the input, which will be described in the next section. The advantage of using ORCA to generate input is that  ORCA is a pre-compiled package, so it is fast when calculating large system compared with PySCF. 
 
@@ -334,10 +334,10 @@ matrix_dic = reader.read_matrix('');
 
 output = {};
 for key in HF_dic:
-    output[key] = [HF_dic[key]];
+    output[key] = HF_dic[key];
 for key in matrix_dic:
-    output[key] = [matrix_dic[key]];
-output['name'] = [system];
+    output[key] = matrix_dic[key];
+output['name'] = system;
 
 with open(path + system + '.json','w') as file:
     json.dump(output, file);
