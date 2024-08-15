@@ -319,21 +319,42 @@ Users first need to run a ORCA DFT calculation using the fast-to-evaluate functi
 cd demo/infer_orca/orca_folder
 /path/to/orca/orca run.inp >log
 ```
-One can also utilize the parallel computing feature of ORCA and submit the calculation to slurm system. Please see ORCA tutorials (https://www.faccts.de/docs/orca/5.0/tutorials/, https://sites.google.com/site/orcainputlibrary/) for efficient ways to implement large DFT calculations in the software. The calculation outputs information to the file "log". Then, run the script "demo/infer_orca/orca_folderread.py":
+One can also utilize the parallel computing feature of ORCA and submit the calculation to slurm system. Please see ORCA tutorials (https://www.faccts.de/docs/orca/5.0/tutorials/, https://sites.google.com/site/orcainputlibrary/) for efficient ways to implement large DFT calculations in the software. The calculation outputs information to the file "log". Then, run the script "demo/infer_orca/read.py":
 ```
+import json;
+from utils import QM_reader;
 
+path = 'orca_folder/';   # Path of ORCA calculation results
+system = 'example';      # Name of the system. Used just in labeling outputs.
+
+reader = QM_reader(path);     
+ne = reader.read_ne('');
+HF_dic = reader.read_HF('');
+matrix_dic = reader.read_matrix('');
+
+output = {};
+for key in HF_dic:
+    output[key] = [HF_dic[key]];
+for key in matrix_dic:
+    output[key] = [matrix_dic[key]];
+output['name'] = [system];
+
+with open(path + system + '.json','w') as file:
+    json.dump(output, file);
 ```
-Consider reset system into a name that identify the molecule you want to calculate. The script is launched by 
+Consider reset "example" into a name that identify the molecule you want to calculate. The script is launched by 
 ```
 cd ../
 python3 read.py
 ```
-An output data file "interface/orca/system_data.json" will then be generated. Moving the data file to the data folder:
+An output data file "demo/infer_orca/orca_folder/example.json" will then be generated. Create a new data group folder and moving the data file to the data folder:
 ```
-mv system_data.json ../../data/
+mkdir ../../dataset/group_infer_example
+mkdir ../../dataset/group_infer_example/basic
+cp orca_folder/example.json ../../dataset/group_infer_example/basic/
 ```
-Then you can use the demo_inference.py script to calculate your system by just replace the data_path line by 
+Then you can use the infer_inp.py script to calculate your system by just replace the data_path line by 
 ```
-data_path = 'data/system_data.json'
+params['datagroup'] = ['group_infer_example'];
 ```
 
