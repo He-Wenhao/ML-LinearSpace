@@ -5,7 +5,7 @@ import os;
 params = {};
 
 # properties to be inferred.
-# V: regularization term, E: energy,  x,y,z: electric dipole,
+# V: regularization term, E: energy,  x,y,z: electric dipole, F: force on nuclei,
 # xx,yy,zz,xy,yz,xz: electric quadrupole, atomic_charge: atomic charge,
 # E_gap: optical gap, bond_order: bond order, alpha: electric static polarizability
 # The weights are not used in the inference
@@ -14,7 +14,7 @@ params['OPS'] = {'E':1,
     'xx':0.01, 'yy':0.01, 'zz':0.01,
     'xy':0.01, 'yz':0.01, 'xz':0.01,
     'atomic_charge': 0.01, 'E_gap':0.2,
-    'bond_order':0.02, 'alpha':3E-5};
+    'bond_order':0.02, 'alpha':3E-5,'F':0.1};
 
 params['device'] = 'cuda:0'; # device to run the code for calculations in the inference.
 params['batch_size'] = 4;    # batch size for inference
