@@ -18,7 +18,8 @@ def pyscf_func(params, elements, pos, name):
            'xx':0.01, 'yy':0.01, 'zz':0.01,
            'xy':0.01, 'yz':0.01, 'xz':0.01,
            'atomic_charge': 0.01, 'E_gap':0.2,
-           'bond_order':0.02, 'alpha':3E-5};
+           'bond_order':0.02, 'alpha':3E-5,
+           'F':0.01};
 
     device = params['device'];
     scaling = params['scaling'];

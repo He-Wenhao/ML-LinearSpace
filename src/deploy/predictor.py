@@ -73,6 +73,19 @@ class predict_fns(object):
         
         return Ohat;
     
+    def F(self, F_mats, pos, elements, el_dict):
+
+        angstrom_to_bohr = 1.88973;
+        Fhat = [];
+        for i,n in enumerate(self.ne):
+            Z = torch.tensor([el_dict[el] for el in elements[i]]).to(self.device);
+            dist = (pos[i][:,None,:] - pos[i][None,:,:]) * angstrom_to_bohr;
+            rij = torch.norm(dist, dim=2, keepdim=True);
+            Fnn = torch.sum(Z[:,None,None] * Z[None,:,None] * dist / (rij + (rij<1e-6))**3, axis=1);
+            Fhat = 2 * torch.einsum('ui,nxuv,vi->nx', [self.co[i], F_mats[i], self.co[i]]) * Z[:,None] + Fnn;
+
+        return Fhat;
+
     def C(self, C_mats):
         
         Chat = [];

@@ -69,6 +69,14 @@ class estimator_test(trainer):
                 Lalpha = calc.alpha(r_mats);
                 property_dic[op_name] = [alphai.tolist() for alphai in Lalpha];
 
+            elif(op_name == 'F'):
+
+                pos = [self.sampler.data[k1]['pos'] for k1 in ind];
+                elements = [self.sampler.data[k1]['elements'] for k1 in ind];
+                F_mat = [self.op_matrices[k1]['F'] for k1 in ind];
+                LF = calc.F(F_mat, pos, elements, self.irreps.el_dict);
+                property_dic[op_name] = [Fi.tolist() for Fi in LF];
+
             else:
                 
                 O_mat = [self.op_matrices[k1][op_name] for k1 in ind];
