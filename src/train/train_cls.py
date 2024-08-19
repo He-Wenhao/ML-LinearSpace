@@ -156,6 +156,16 @@ class trainer():
 
                 L_grads[op_name] = Lalpha_grad;
                 L_ave[i] += Lalpha_out;
+            
+            elif(op_name == 'F'):
+                
+                pos = [self.sampler.data[k1]['pos'] for k1 in ind];
+                elements = [self.sampler.data[k1]['elements'] for k1 in ind];
+                F = labels['F'];
+                F_mat = [self.op_matrices[k1]['F'] for k1 in ind];
+                LF, LF_out = loss_calculator.F_loss(F, F_mat, pos, elements, self.irreps.el_dict);
+                L_grads[op_name] = LF;
+                L_ave[i] += LF_out;
 
             else:
                 

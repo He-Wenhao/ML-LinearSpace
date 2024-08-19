@@ -88,6 +88,26 @@ class Losses(object):
         
         return LO_grad/len(self.ne), LO_out/len(self.ne);
     
+    def F_loss(self, F_labels, F_mats, pos, elements, el_dict):
+
+        angstrom_to_bohr = 1.88973;
+        LF_grad, LF_out = 0, 0;
+        for i,n in enumerate(self.ne):
+
+            Z = torch.tensor([el_dict[el] for el in elements[i]]).to(self.device);
+            dist = (pos[i][:,None,:] - pos[i][None,:,:]) * angstrom_to_bohr;
+            rij = torch.norm(dist, dim=-1, keepdim=True);
+            Fnn = torch.sum(Z[:,None,None] * Z[None,:,None] * dist / (rij + (rij<1e-6))**3, axis=1);
+            Fhat = 2 * torch.einsum('ui,nxuv,vi->nx', [self.co[i], F_mats[i], self.co[i]]) * Z[:,None] + Fnn;
+            F_term = (Fhat - F_labels[i])[...,None,None] * \
+                     (torch.einsum('uk,nxuv,vi->nxik', [self.cv[i], F_mats[i], self.co[i]]) * \
+                     torch.einsum('ui,uv,vk->ik', [self.co[i], self.H[i], self.cv[i]])[None,None,...]);
+            LF_grad += torch.mean(torch.sum(self.epsilon_ij[i][None,None,...] * F_term,
+                                            axis=(2,3))) * 2;
+            LF_out += torch.mean((Fhat - F_labels[i])**2/2);
+        
+        return LF_grad/len(self.ne), LF_out/len(self.ne);
+    
     def C_loss(self, C_labels, C_mats):
         
         LC_grad, LC_out = 0, 0;
