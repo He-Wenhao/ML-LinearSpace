@@ -133,7 +133,7 @@ class sampler(object):
         if('E' in labels[0]):
             batch_labels['Ee'] = [l['E']-l['E_nn'] for l in labels]
         
-        op_names += ['atomic_charge','E_gap','B','alpha'];
+        op_names += ['atomic_charge','E_gap','B','alpha','F'];
 
         for op_name in op_names:
             batch_labels[op_name] = self.get_list(labels, op_name);
