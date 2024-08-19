@@ -56,13 +56,16 @@ class generate_basic:
         ind = 0
         perm_mat = 'None'
         while ind < len(mol.ao_labels()):
-            l_val = mol.ao_labels()[ind][5]
-            if l_val == 's':
+            l_val = mol.ao_labels()[ind]
+            if 's' in l_val:
                 ind += 1
-            elif l_val == 'p':
+                l_val = 's';
+            elif 'p' in l_val:
                 ind += 3
-            elif l_val == 'd':
+                l_val = 'p';
+            elif 'd' in l_val:
                 ind += 5
+                l_val = 'd';
             else:
                 raise TypeError('wrong l value')
             perm_mat = self.direct_sum(perm_mat, 
@@ -79,8 +82,10 @@ class generate_basic:
                 atom_str += ' '+str(x);
             atom_str += ';';
         atom_str = atom_str[:-1];
-
-        mol = gto.M(atom = atom_str, basis = 'def2-svp', symmetry = True);
+        try:
+            mol = gto.M(atom = atom_str, basis = 'def2-svp', symmetry = True);
+        except:
+            mol = gto.M(atom = atom_str, basis = 'def2-svp', symmetry = False);
     
         return mol
 
@@ -94,6 +99,13 @@ class generate_basic:
                                                torch.Tensor(res).to(self.device)),
                                   Smhalf)
             data_obs[operator] = output;
+
+        Fmat = self.integrator.calc_F(torch.tensor(pos, 
+                        dtype=torch.float).to(self.device), elements);
+        F_out = torch.matmul(torch.matmul(Smhalf,
+                                            torch.Tensor(Fmat).to(self.device)),
+                                Smhalf)
+        data_obs['F'] = F_out;
 
         return data_obs;
 

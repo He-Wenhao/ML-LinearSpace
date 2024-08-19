@@ -78,6 +78,11 @@ class dataloader():
         if('alpha' in obs):
             label['alpha'] = torch.tensor(obs['alpha']).to(self.device);
         
+        if('F' in obs):
+            label['F'] = torch.tensor(obs['F']).to(self.device);
+        else:
+            label['F'] = torch.zeros([len(obs['atomic_charge']),3]).to(self.device);
+
         for op_name in self.op_names:
             if(op_name in obs):
                 label[op_name] = obs[op_name]
@@ -94,6 +99,13 @@ class dataloader():
                                                torch.Tensor(res).to(self.device)),
                                   self.S_mhalf)
             data_obs[operator] = output;
+
+        Fmat = self.integrator.calc_F(self.pos, 
+                                         self.elements);
+        F_out = torch.matmul(torch.matmul(self.S_mhalf,
+                                            torch.Tensor(Fmat).to(self.device)),
+                                self.S_mhalf)
+        data_obs['F'] = F_out;
 
         return data_obs;
 
