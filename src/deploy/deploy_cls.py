@@ -114,7 +114,7 @@ class estimator_test(trainer):
                     properties_dic[key]['label'] += [u.tolist() for u in labels['B']];
                 elif(key == 'E'):
                     properties_dic[key]['label'] += labels['Ee'];
-                elif(key in ['atomic_charge','alpha']):
+                elif(key in ['atomic_charge','alpha','F']):
                     properties_dic[key]['label'] += [u.tolist() for u in labels[key]];
                 else:
                     properties_dic[key]['label'] += labels[key];
