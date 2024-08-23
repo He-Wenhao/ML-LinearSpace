@@ -12,6 +12,7 @@ params['element_list'] = ['H','C','N','O','F']; # list of elements in the datase
 params['path'] = os.getcwd() +'/';              # path to the package directory
 params['output_path']= os.getcwd()+'/output/';  # output path for the inference results
 params['model_file'] = 'QM9_model.pt';         # model file for inference
+params['nodeRDM_flag'] = False
 
 elements = ['C','H','H','H','H'];         # list of elements in the molecule
 pos = [[0.000000, 0.000000, 0.000000],

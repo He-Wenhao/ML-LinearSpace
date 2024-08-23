@@ -28,5 +28,6 @@ params['path'] = os.getcwd() +'/';              # path to the package directory
 params['datagroup'] = ['group_test']; # list of data groups for testing
 params['output_path']= os.getcwd()+'/output/';                # output path for the testing results
 params['model_file'] = 'QM9_model.pt';                       # model file for testing
+params['nodeRDM_flag'] = False
 
 test_func(params);  # test the model

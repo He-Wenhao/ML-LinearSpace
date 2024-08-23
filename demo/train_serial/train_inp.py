@@ -38,6 +38,7 @@ params['world_size'] = 1;                                 # number of GPUs for p
 params['output_path']= os.getcwd()+'/output/';            # output path for the training results
 params['ddp_mode'] = 'serial';                            # distributed data parallel mode for training
                                                           # set as 'serial','spawn','elastic' for serial, multiprocessing spawn, and elastic ddp modes
+params['nodeRDM_flag'] = False
 
 if(__name__ == '__main__' or params['ddp_mode'] == 'elastic'):
 

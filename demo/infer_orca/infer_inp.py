@@ -27,5 +27,6 @@ params['path'] = os.getcwd() +'/';              # path to the package directory
 params['datagroup'] = ['group_infer'];          # list of data groups for inference
 params['output_path']= os.getcwd()+'/output/';  # output path for the inference results
 params['model_file'] = 'QM9_model.pt';         # model file for inference
+params['nodeRDM_flag'] = False
 
 infer_func(params); # infer the properties of molecules

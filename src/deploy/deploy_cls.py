@@ -20,7 +20,7 @@ import matplotlib.pyplot as plt;
 
 class estimator_test(trainer):
 
-    def __init__(self, device, data_in, labels, op_matrices=[], output_folder='output/test') -> None:
+    def __init__(self, device, data_in, labels, op_matrices=[], output_folder='output/test',nodeRDM_flag="False") -> None:
 
         # Initialize a neural network model, an optimizer,
         # and set training parameters.
@@ -28,7 +28,7 @@ class estimator_test(trainer):
         # kn: the weight of the electron density term in the loss function
         # lr: learning rate
 
-        trainer.__init__(self, device, data_in, labels, op_matrices);
+        trainer.__init__(self, device, data_in, labels, op_matrices,nodeRDM_flag=nodeRDM_flag);
 
         if(not os.path.exists(output_folder)):
             os.mkdir(output_folder);
@@ -96,7 +96,9 @@ class estimator_test(trainer):
         for batch_ind in range(N_batchs):
             minibatch, labels, ind = self.sampler.sample(batch_ind = batch_ind, batch_size=batch_size,
                                                     irreps=self.irreps, op_names=operators_electric);
-            
+            if self.nodeRDM_flag:
+                nodeRDM = self.get_nodeRDM(minibatch)
+                minibatch["nodeRDM"] = torch.cat(nodeRDM,dim=0)
             V, T, G = self.inference(minibatch);
             
             # number of occupied orbitals

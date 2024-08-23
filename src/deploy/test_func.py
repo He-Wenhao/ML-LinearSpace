@@ -22,6 +22,7 @@ def test_func(params):
     output_path = params['output_path'];
     datagroup = params['datagroup'];
     model_file = params['model_file'];
+    nodeRDM_flag = params['nodeRDM_flag'] 
 
     ###################### load data and model ######################
 
@@ -36,7 +37,7 @@ def test_func(params):
     data, labels, obs_mats, batch_size = loader.load_data(datagroup, rank, world_size);
         
     estimator = estimator_test(device, data, labels,
-                    op_matrices=obs_mats);
+                    op_matrices=obs_mats,output_folder=params['output_path'],nodeRDM_flag=nodeRDM_flag);
 
     estimator.build_irreps(element_list = element_list);
     

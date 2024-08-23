@@ -36,6 +36,7 @@ params['load_model'] = True;                              # load the pre-trained
 params['world_size'] = 16;                                # number of GPUs for parallel training
 params['output_path']= os.getcwd()+'/output/';            # output path for the training results
 params['ddp_mode'] = 'elastic';                           # distributed data parallel mode for training
+params['nodeRDM_flag'] = False
 
 if(__name__ == '__main__' or params['ddp_mode'] == 'elastic'):
 
