@@ -17,7 +17,7 @@ import os;
 
 class trainer():
 
-    def __init__(self, device, data_in, labels, op_matrices=[]) -> None:
+    def __init__(self, device, data_in, labels, op_matrices=[],nodeRDM_flag = False) -> None:
 
         # Initialize a neural network model, an optimizer,
         # and set training parameters.
@@ -29,6 +29,7 @@ class trainer():
         self.sampler = sampler(data_in, labels, device);
         self.n_molecules = len(data_in);
         self.op_matrices = op_matrices;
+        self.nodeRDM_flag = nodeRDM_flag;
     
     def build_irreps(self, element_list = ['H','C','N','O','F']):
         
@@ -40,7 +41,7 @@ class trainer():
     def build_model(self, scaling = {'V':0.2, 'T': 0.01}):
         
         self.scaling = scaling;
-        self.model = V_theta(self.device, self.irreps).to(self.device);
+        self.model = V_theta(self.device, self.irreps,nodeRDM_flag=self.nodeRDM_flag).to(self.device);
         self.transformer = to_mat(self.device, self.irreps);
 
     def build_ddp_model(self, scaling = {'V':0.2, 'T': 0.01}):
@@ -180,6 +181,24 @@ class trainer():
                     for key in op_names])/len(ind) + regularization;
 
         return L, L_ave;
+    
+    def get_nodeRDM(self,minibatch):
+        h = minibatch['h'];
+        norbs = minibatch['norbs']
+        ne = minibatch['ne']
+        
+        # generate block_RDM, which is 1-RDM of eigen state of h, but segmented to different blocks
+        epsilon, phi = np.linalg.eigh(h.tolist());
+        rdms = []
+        for i in range(len(phi)):
+            nb = norbs[i]
+            n = ne[i]
+            p = torch.tensor(phi[i,:nb,:n], dtype=torch.float32).to(self.device)
+            rdm = torch.einsum("ij,kj->ik",[p,p])
+            rdms.append(rdm)
+        nodeRDM = self.transformer.nodeRDM(rdms,minibatch,aligned=True)
+            
+        return nodeRDM
 
     def train(self, steps=10, batch_size = 50,
                     op_names=[]) -> float:
@@ -212,6 +231,9 @@ class trainer():
 
                 minibatch, labels, ind = self.sampler.sample(batch_ind = batch_ind, batch_size=batch_size,
                                                         irreps=self.irreps, op_names=operators_electric);
+                if self.nodeRDM_flag:
+                    nodeRDM = self.get_nodeRDM(minibatch)
+                    minibatch["nodeRDM"] = torch.cat(nodeRDM,dim=0)
                 
                 V, T, G = self.inference(minibatch);
                 

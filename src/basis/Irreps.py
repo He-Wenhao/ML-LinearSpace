@@ -39,6 +39,21 @@ class Irreps_build(object):
             orbs.append([u for u in self.orbs[ele] if u!=0]);
 
         return orbs;
+    
+    def get_max_orbs(self):
+        lists = self.get_orbs()
+        max_length = max(len(lst) for lst in lists)
+        max_list = [0] * max_length
+        for lst in lists:
+            for i, value in enumerate(lst):
+                if value > max_list[i]:
+                    max_list[i] = value
+        return max_list
+    
+    def get_max_irreps_square(self):
+        max_ind = self.get_orbs().index(self.get_max_orbs())
+        ele_ind = self.elements[max_ind]
+        return self.irreps2[(ele_ind,ele_ind)]
 
     def generate_irreps(self):
         

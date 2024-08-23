@@ -6,7 +6,7 @@ from e3nn import nn
 
 class V_theta(torch.nn.Module):
     
-    def __init__(self, device, irreps, ele_emb: int=3, emb_neurons: int = 16, scaling=0.2) -> None:
+    def __init__(self, device, irreps, ele_emb: int=3, emb_neurons: int = 16, scaling=0.2, nodeRDM_flag= False) -> None:
         super().__init__()
         
         # Initialize a Equivariance graph convolutional neural network
@@ -15,13 +15,19 @@ class V_theta(torch.nn.Module):
         
         self.device = device;
         self.scaling = scaling;
+        self.nodeRDM_flag = nodeRDM_flag
         
         ######## Define the input and output irreps ########
         irreps_pair = irreps.get_pair_irreps();
         irreps_node = irreps.get_onsite_irreps();
         irreps_sh = irreps.get_sh_irreps();
+        max_irreps = irreps.get_max_irreps_square();
         input_dim = irreps.get_input_irreps();
-        irreps_hidden = [o3.Irreps(str(ele_emb)+'x0e')] + irreps.get_hidden_irreps(lmax=2);
+        irreps_linear = o3.Irreps(str(ele_emb)+'x0e')
+        input_irreps = o3.Irreps(str(ele_emb)+'x0e')
+        if nodeRDM_flag:
+            input_irreps += max_irreps
+        irreps_hidden = [input_irreps] + irreps.get_hidden_irreps(lmax=2);
 
         ######### Element embedding network #########
         self.ele_embed = torch.nn.Sequential(
@@ -50,7 +56,7 @@ class V_theta(torch.nn.Module):
             irrep = str(irreps_hidden[i+1]);
             Nact, Ntot = irrep.count('0'), irrep.count('+')+1;
             linears.append(o3.FullyConnectedTensorProduct(
-                irreps_in1=irreps_hidden[0],
+                irreps_in1=irreps_linear,
                 irreps_in2=irreps_hidden[i+1],
                 irreps_out=irreps_hidden[i+1],
             ));
@@ -99,6 +105,8 @@ class V_theta(torch.nn.Module):
         # The basis on an atom is ranked as (s1,s2,s3,p1_(-1,0,1),p2_(-1,0,1),d1_(-2,-1,0,1,2))
         sh = minibatch['sh'];
         emb = minibatch['emb'];
+        if self.nodeRDM_flag:
+            nodeRDM = minibatch['nodeRDM'];
         f_in = minibatch['f_in'];
         edge_src = minibatch['edge_src'];
         edge_dst = minibatch['edge_dst'];
@@ -108,6 +116,8 @@ class V_theta(torch.nn.Module):
         
         inputs = self.ele_embed(f_in);
         node_feature = inputs;
+        if self.nodeRDM_flag:
+            node_feature = torch.cat((node_feature,nodeRDM),dim=1)
 
         for i in range(3):
             edge_feature = self.tp_convs[i](node_feature[edge_src], sh, self.fcs[i](emb));

@@ -35,7 +35,7 @@ def train_func(rank, params):
     load_model = params['load_model'];
 
     world_size = params['world_size'];
-    
+    nodeRDM_flag = params['nodeRDM_flag']
     ###################### load data and model ######################
 
     basis_path = path + 'script';
@@ -49,7 +49,9 @@ def train_func(rank, params):
     data, labels, obs_mats, batch_size = loader.load_data(datagroup, rank, world_size);
         
     train1 = trainer(device, data, labels,
-                    op_matrices=obs_mats);
+                    op_matrices=obs_mats,nodeRDM_flag=nodeRDM_flag);
+    
+    
 
     train1.build_irreps(element_list = element_list);
     
