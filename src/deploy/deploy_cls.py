@@ -28,7 +28,7 @@ class estimator_test(trainer):
         # kn: the weight of the electron density term in the loss function
         # lr: learning rate
 
-        trainer.__init__(self, device, data_in, labels, op_matrices,nodeRDM_flag=nodeRDM_flag);
+        trainer.__init__(self, device, data_in, labels,nodeRDM_flag=nodeRDM_flag, op_matrices=op_matrices);
 
         if(not os.path.exists(output_folder)):
             os.mkdir(output_folder);
