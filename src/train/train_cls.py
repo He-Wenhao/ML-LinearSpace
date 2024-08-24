@@ -17,7 +17,7 @@ import os;
 
 class trainer():
 
-    def __init__(self, device, data_in, labels, op_matrices=[],nodeRDM_flag = False) -> None:
+    def __init__(self, device, data_in, labels,nodeRDM_flag, op_matrices=[]) -> None:
 
         # Initialize a neural network model, an optimizer,
         # and set training parameters.
@@ -47,7 +47,7 @@ class trainer():
     def build_ddp_model(self, scaling = {'V':0.2, 'T': 0.01}):
             
         self.scaling = scaling;
-        self.model = DDP(V_theta(self.device,self.irreps).to(self.device), device_ids=[self.device]);
+        self.model = DDP(V_theta(self.device,self.irreps,nodeRDM_flag=self.nodeRDM_flag).to(self.device), device_ids=[self.device]);
         self.transformer = to_mat(self.device, self.irreps);
 
     def build_optimizer(self, lr=10**-3):
@@ -90,6 +90,8 @@ class trainer():
                         res['module.'+key] = res[key];
                         del res[key];
                     self.model.load_state_dict(res);
+        else:
+            raise ValueError("file not exists:"+filename)
 
     def save(self, filename):
         

@@ -6,7 +6,7 @@ from e3nn import nn
 
 class V_theta(torch.nn.Module):
     
-    def __init__(self, device, irreps, ele_emb: int=3, emb_neurons: int = 16, scaling=0.2, nodeRDM_flag= False) -> None:
+    def __init__(self, device, irreps, nodeRDM_flag, ele_emb: int=3, emb_neurons: int = 16, scaling=0.2) -> None:
         super().__init__()
         
         # Initialize a Equivariance graph convolutional neural network

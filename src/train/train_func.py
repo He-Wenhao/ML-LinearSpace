@@ -49,7 +49,7 @@ def train_func(rank, params):
     data, labels, obs_mats, batch_size = loader.load_data(datagroup, rank, world_size);
         
     train1 = trainer(device, data, labels,
-                    op_matrices=obs_mats,nodeRDM_flag=nodeRDM_flag);
+                    nodeRDM_flag=nodeRDM_flag, op_matrices=obs_mats);
     
     
 

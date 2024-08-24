@@ -20,7 +20,7 @@ import matplotlib.pyplot as plt;
 
 class estimator_test(trainer):
 
-    def __init__(self, device, data_in, labels, op_matrices=[], output_folder='output/test',nodeRDM_flag="False") -> None:
+    def __init__(self, device, data_in, labels, nodeRDM_flag, op_matrices=[], output_folder='output/test') -> None:
 
         # Initialize a neural network model, an optimizer,
         # and set training parameters.
