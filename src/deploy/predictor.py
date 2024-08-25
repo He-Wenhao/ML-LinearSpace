@@ -82,7 +82,7 @@ class predict_fns(object):
             dist = (pos[i][:,None,:] - pos[i][None,:,:]) * angstrom_to_bohr;
             rij = torch.norm(dist, dim=2, keepdim=True);
             Fnn = torch.sum(Z[:,None,None] * Z[None,:,None] * dist / (rij + (rij<1e-6))**3, axis=1);
-            Fhat = 2 * torch.einsum('ui,nxuv,vi->nx', [self.co[i], F_mats[i], self.co[i]]) * Z[:,None] + Fnn;
+            Fhat.append(2 * torch.einsum('ui,nxuv,vi->nx', [self.co[i], F_mats[i], self.co[i]]) * Z[:,None] + Fnn);
 
         return Fhat;
 
