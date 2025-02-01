@@ -1,3 +1,10 @@
+import sys
+
+
+sys.path.append('src')
+sys.path.append('../../src')
+sys.path.append('../..')
+
 from train import main;
 import os;
 # This script is used to train the multi-task electronic structure model

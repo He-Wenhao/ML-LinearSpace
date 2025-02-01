@@ -136,6 +136,8 @@ class V_theta(torch.nn.Module):
 
         screen_mat = self.screen2(self.screen_activation(self.screen1(node_feature)));
         gap_mat = self.gap2(self.gap_activation(self.gap1(node_feature)));
+        
+        
 
         V_raw = {'node': node_onsite,
                  'edge': edge_pair,
