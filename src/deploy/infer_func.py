@@ -35,7 +35,7 @@ def infer_func(params):
 
     data, obs_mats = loader.load(datagroup);
         
-    est = estimator(device, data, obs_mats);
+    est = estimator(device, data, obs_mats,output_folder=os.path.join(output_path,'inference'));
 
     est.build_irreps(element_list = element_list);
     

@@ -1,1 +1,0 @@
-epoch	 loss_V	 loss_E	 loss_x	 loss_y	 loss_z	 loss_xx	 loss_yy	 loss_zz	 loss_xy	 loss_yz	 loss_xz	 loss_atomic_charge	 loss_E_gap	 loss_bond_order	 loss_alpha	 loss_F	

@@ -55,6 +55,12 @@ class predict_fns(object):
 
             self.H.append(H[i,:nb,:nb]);
     
+    def proj(self):
+        
+        
+        return self.V;
+    
+    
     def E(self):
         
         Ehat = [];

@@ -1,1 +1,4 @@
-examples/Hchain/H_chain_xyzs/
+dataset/*
+!dataset/group_infer/
+!dataset/group_train/
+!dataset/group_test/

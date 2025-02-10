@@ -57,6 +57,9 @@ class dataloader():
 
         label = {};
 
+        if('proj' in obs):
+            label['proj'] = torch.tensor(obs['proj'],device=self.device);
+            
         if('energy' in obs):
             label['E'] = obs['energy'];
             label['E_nn'] = obs['E_nn'];
@@ -78,10 +81,10 @@ class dataloader():
         if('alpha' in obs):
             label['alpha'] = torch.tensor(obs['alpha']).to(self.device);
         
-        if('F' in obs):
-            label['F'] = torch.tensor(obs['F']).to(self.device);
-        else:
-            label['F'] = torch.zeros([len(obs['atomic_charge']),3]).to(self.device);
+        #if('F' in obs):
+            #label['F'] = torch.tensor(obs['F']).to(self.device);
+        #else:
+            #label['F'] = torch.zeros([len(obs['atomic_charge']),3]).to(self.device);
 
         for op_name in self.op_names:
             if(op_name in obs):
@@ -182,7 +185,7 @@ class dataloader():
             
             basic_path = file[0] + file[1];
             data_in.append(self.read_basic(basic_path));
-            obs_path = file[0][:-7] + '/obs/' + file[1].split('_')[0]+file[1][-5:];
+            obs_path = file[0][:-7] + '/obs/' + file[1].split('_')[0];
             labels.append(self.read_obs(obs_path));
             obs_mat.append(self.read_obs_mat());
 

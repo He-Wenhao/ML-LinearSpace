@@ -32,6 +32,9 @@ class estimator_test(trainer):
 
         if(not os.path.exists(output_folder)):
             os.mkdir(output_folder);
+            
+    def eval_downfolded_energy(self,pos,elements,origin_basis,proj):
+        raise ValueError("Not implemented")
 
 
     def evaluate_properties(self, calc, ind, op_names):
@@ -40,7 +43,24 @@ class estimator_test(trainer):
 
         for i, op_name in enumerate(op_names):
                 
-            if(op_name == 'E'):
+            if(op_name == 'proj'):
+                
+                projs = calc.proj();
+                property_dic[op_name] = [proj.tolist() for proj in projs];
+                
+            elif(op_name == 'pos'):
+                
+                pass
+                
+            elif(op_name == 'name'):
+                
+                pass
+                
+            elif(op_name == 'elements'):
+                
+                pass
+                
+            elif(op_name == 'E'):
                 
                 LE = calc.E();
                 property_dic[op_name] = [float(Ei) for Ei in LE];

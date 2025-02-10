@@ -115,7 +115,11 @@ class trainer():
 
         for i, op_name in enumerate(op_names):
             
-            if(op_name == 'V'):
+            if(op_name == 'proj'):
+                L_grads[op_name] = loss_calculator.proj_loss(labels['proj']);
+                L_ave[i] += L_grads[op_name];
+            
+            elif(op_name == 'V'):
         
                 L_grads[op_name] = loss_calculator.V_loss();
                 L_ave[i] += L_grads[op_name];
@@ -216,9 +220,9 @@ class trainer():
         # This method implements gradient descend to the contained model
         # and return the average loss
         
-        operators_electric = [key for key in list(op_names.keys()) \
-                              if key in ['x','y','z','xx','yy',
-                                         'zz','xy','xz','yz']];
+        #operators_electric = [key for key in list(op_names.keys()) \
+        #                      if key in ['x','y','z','xx','yy',
+        #                                 'zz','xy','xz','yz']];
         L_ave = np.zeros(len(op_names));
         N_batchs = int(round(self.n_molecules/batch_size));
 
@@ -232,7 +236,7 @@ class trainer():
                 self.optim.zero_grad()  # clear gradient
 
                 minibatch, labels, ind = self.sampler.sample(batch_ind = batch_ind, batch_size=batch_size,
-                                                        irreps=self.irreps, op_names=operators_electric);
+                                                        irreps=self.irreps, op_names=op_names);
                 if self.nodeRDM_flag:
                     nodeRDM = self.get_nodeRDM(minibatch)
                     minibatch["nodeRDM"] = torch.cat(nodeRDM,dim=0)

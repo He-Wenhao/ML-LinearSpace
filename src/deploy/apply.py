@@ -32,6 +32,12 @@ class estimator(estimator_test):
         self.n_molecules = len(data_in);
         self.op_matrices = op_matrices;
         self.el_dict = {el.symbol: {'Z':el.number,'M':el.mass} for el in elements};
+        self.nodeRDM_flag = False;
+        
+        # get atom positions and elements by molecule
+        self.mol_pos = [data_in[i]['pos'][:, [2, 0, 1]].tolist() for i in range(self.n_molecules)] # mol_pos has (x,y,z) order
+        self.mol_elements = [data_in[i]['elements'] for i in range(self.n_molecules)]
+        self.mol_name = [data_in[i]['name'] for i in range(self.n_molecules)]
 
         if(not os.path.exists(output_folder)):
             os.mkdir(output_folder);
@@ -98,7 +104,7 @@ class estimator(estimator_test):
                             'zz','xy','xz','yz']];
         N_batchs = int(round(self.n_molecules/batch_size));
         properties_dic = {};
-
+        properties_dic['proj'] = []
         for batch_ind in range(N_batchs):
 
             minibatch, ind = self.sampler.sample(batch_ind = batch_ind, batch_size=batch_size,
@@ -115,15 +121,27 @@ class estimator(estimator_test):
             properties = self.evaluate_properties(property_calc, ind, op_names);
 
             for i, op_name in enumerate(op_names):
+                
+                if op_name == 'pos':
+                    properties_dic[op_name] = self.mol_pos
+                    
+                elif op_name == 'elements':
+                    properties_dic[op_name] = self.mol_elements
+                    
+                elif op_name == 'name':
+                    properties_dic[op_name] = self.mol_name
+                    
+                elif op_name == 'proj':
+                    properties_dic[op_name] += properties[op_name]
 
-                if(op_name in ['x','y','z','xx','yy','zz','xy','xz','yz']):
+                elif(op_name in ['x','y','z','xx','yy','zz','xy','xz','yz']):
 
                     multipole = self.get_multipole(op_name, batch_ind = batch_ind, batch_size=batch_size);
                     Ohat = [(multipole[ind] - torch.tensor(ele_part, 
                             dtype=torch.float).to(self.device)).tolist() for ind,ele_part in enumerate(properties[op_name])];
                     properties[op_name] = Ohat;
             
-                if(op_name == 'atomic_charge'):
+                elif(op_name == 'atomic_charge'):
 
                     nuclearCharge = self.get_nuclear_charge(batch_ind = batch_ind, batch_size=batch_size);
 
@@ -131,12 +149,12 @@ class estimator(estimator_test):
                             dtype=torch.float).to(self.device)).tolist() for ind,ele_part in enumerate(properties[op_name])];
                     properties[op_name] = Chat;
                 
-                if(op_name == 'E_gap'):
+                elif(op_name == 'E_gap'):
                     
                     hartree_to_eV = 27.211396641308;
                     properties[op_name] = [Ei*hartree_to_eV for Ei in properties[op_name]];
                 
-                if(op_name == 'E'):
+                elif(op_name == 'E'):
                         
                     hartree_to_kcalmol = 627.509;
                     res = [];
@@ -144,7 +162,7 @@ class estimator(estimator_test):
                         res.append((Ei+self.sampler.data[ind[i1]]['E_nn'])*hartree_to_kcalmol);
                     properties[op_name] = res;
                 
-                if(op_name == 'bond_order'):
+                elif(op_name == 'bond_order'):
 
                     update = [];
                     for Bi in properties[op_name]:
@@ -153,11 +171,8 @@ class estimator(estimator_test):
                         Bnew = [(int(ind[0]), int(ind[1]), Bi[ind[0]][ind[1]]) for ind in Bind];
                         update.append(Bnew);
                     properties[op_name] = update;
-                
-                if(op_name not in properties_dic.keys()):
-                    properties_dic[op_name] = properties[op_name];
-                    properties_dic['name'] = [self.sampler.data[i]['name'] for i in ind];
                 else:
+                    raise ValueError('not implemented')
                     properties_dic[op_name] += properties[op_name];
                     properties_dic['name'] += [str(self.sampler.data[i]['name']) for i in ind];
 

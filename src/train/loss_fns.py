@@ -17,7 +17,7 @@ class Losses(object):
         self.h = h;
         self.T = T;
         self.G = G;
-        H = h+V;
+        H = h+V;    # dbg
         self.ne = ne;
         self.norbs = norbs;
         self.epsilon, phi = np.linalg.eigh(H.tolist());
@@ -54,6 +54,9 @@ class Losses(object):
             self.epsilon_ik.append(epsilon_ik/(epsilon_ik**2 + smear**2));
 
             self.H.append(H[i,:nb,:nb]);
+            
+    def proj_loss(self,proj):
+        return torch.mean((self.V-torch.stack(proj))**2);
 
     def V_loss(self):
 
