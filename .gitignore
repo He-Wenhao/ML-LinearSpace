@@ -2,3 +2,6 @@ dataset/*
 !dataset/group_infer/
 !dataset/group_train/
 !dataset/group_test/
+!dataset/H4_test/
+!dataset/H4_train/
+!dataset/H4_test_s/
