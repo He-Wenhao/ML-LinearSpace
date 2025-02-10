@@ -43,7 +43,7 @@ def infer_func(params):
     est.load(output_path + '/model/' + model_file);
     est.build_charge_matrices(data);
 
-    rec = recorder(OPS, rank=rank, path = output_path);
+    rec = recorder(OPS, rank=rank, path = output_path, inf_mode = True);
     ############### Implement model training #####################
 
     properties = est.solve_apply(

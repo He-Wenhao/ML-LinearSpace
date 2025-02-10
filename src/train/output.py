@@ -3,7 +3,7 @@ import json;
 
 class recorder:
 
-    def __init__(self, OPS, rank=0, path='output'):
+    def __init__(self, OPS, rank=0, path='output',inf_mode = False):
         
         if(not os.path.exists(path)):
             os.mkdir(path);
@@ -26,12 +26,13 @@ class recorder:
         self.test_file = path + '/test/test.json';
         self.inference_file = path + '/inference/inference.json';
 
-        with open(self.loss_file,'w') as file:
+        if not inf_mode:
+            with open(self.loss_file,'w') as file:
 
-            file.write('epoch\t');
-            for i in range(len(OPS)):
-                file.write(' loss_'+str(list(OPS.keys())[i])+'\t');
-            file.write('\n');
+                file.write('epoch\t');
+                for i in range(len(OPS)):
+                    file.write(' loss_'+str(list(OPS.keys())[i])+'\t');
+                file.write('\n');
 
     def record_loss(self, i, loss):
         
