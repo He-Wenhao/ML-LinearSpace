@@ -24,7 +24,7 @@ params['scaling'] = {'V':1, 'T': 0.01};         # scaling factors for the neural
 params['element_list'] = ['H','C','N','O','F']; # list of elements in the dataset
                                                 # should be the same as the element_list used in the model training
 params['path'] = os.getcwd() +'/';              # path to the package directory
-params['datagroup'] = ['H4_test'];          # list of data groups for inference
+params['datagroup'] = ['H4_074_test'];          # list of data groups for inference
 params['output_path']= os.getcwd()+'/output_proj/';  # output path for the inference results
 params['model_file'] = 'test.pt';         # model file for inference
 params['nodeRDM_flag'] = False
