@@ -8,6 +8,21 @@ Created on Mon Jan 15 15:16:14 2024
 import torch;
 import numpy as np;
 
+def pad_and_stack(proj):
+    # Find the maximum size
+    max_size = max(tensor.shape[0] for tensor in proj)
+
+    # Pad each tensor to the maximum size
+    padded_proj = []
+    for tensor in proj:
+        pad_size = max_size - tensor.shape[0]
+        padded_tensor = torch.nn.functional.pad(tensor, (0, pad_size, 0, pad_size))  # Pad on right and bottom
+        padded_proj.append(padded_tensor)
+
+    # Stack them into a single tensor
+    return torch.stack(padded_proj)
+
+
 class Losses(object):
     
     def __init__(self, h, V, T, G, ne, norbs, device, smear = 5E-3):
@@ -55,8 +70,10 @@ class Losses(object):
 
             self.H.append(H[i,:nb,:nb]);
             
+
+            
     def proj_loss(self,proj):
-        return torch.mean((self.V-torch.stack(proj))**2);
+        return torch.mean((self.V-pad_and_stack(proj))**2);
 
     def V_loss(self):
 
