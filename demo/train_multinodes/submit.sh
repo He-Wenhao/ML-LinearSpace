@@ -8,4 +8,4 @@
 
 module load pytorch/2.1.0-cu12
 
-srun --nodes=4 bash torchrun_script.sh
+srun --nodes=4 bash demo/train_multinodes/torchrun_script.sh

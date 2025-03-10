@@ -41,7 +41,7 @@ class dataloader():
         norbs = int(round(sum([self.nbasis[ele] for ele in elements])));
 
         h = torch.tensor(basic['h']).to(self.device);
-        S_mhalf = scipy.linalg.fractional_matrix_power(basic['S'], (-1/2)).tolist();
+        S_mhalf = scipy.linalg.fractional_matrix_power(basic['S'], (-1/2)).real.tolist();
         S_mhalf = torch.tensor(S_mhalf).to(self.device);
         self.S_mhalf = S_mhalf;
         h = torch.matmul(torch.matmul(S_mhalf, h),S_mhalf);

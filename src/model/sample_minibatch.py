@@ -12,7 +12,7 @@ from e3nn import o3;
 
 class sampler(object):
 
-    def __init__(self, data_in, labels, device, min_radius: float = 0.5, max_radius: float = 2):
+    def __init__(self, data_in, labels, device, min_radius: float = 0.5, max_radius: float = 3.):
 
         self.data = data_in;
         self.labels = labels;
