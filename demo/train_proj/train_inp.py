@@ -39,7 +39,7 @@ params['Nsave'] = 10;                   # number of epochs to save the model
 params['element_list'] = ['H','C','N','O','F'];           # list of elements in the dataset
                                                           # should be the same as the element_list used in the model training
 params['path'] = os.getcwd() +'/';                        # path to the package directory
-params['datagroup'] = ['H4_diss']; # list of data groups for training
+params['datagroup'] = ['H4_diss','H2']; # list of data groups for training
 params['load_model'] = False;                             # load the pre-trained model
 params['world_size'] = 1;                                 # number of GPUs for parallel training
 params['output_path']= os.getcwd()+'/output_proj/';            # output path for the training results
