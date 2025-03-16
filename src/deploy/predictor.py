@@ -55,10 +55,22 @@ class predict_fns(object):
             self.epsilon_ik.append(epsilon_ik/(epsilon_ik**2 + smear**2));
 
             self.H.append(H[i,:nb,:nb]);
+        self.epsilon_h, self.phi_h = np.linalg.eigh(self.h.tolist());
+        self.epsilon_h = torch.tensor(self.epsilon_h, dtype=torch.float32).to(self.device);
+        self.phi_h = torch.tensor(self.phi_h, dtype=torch.float32).to(device);
+    
     
     def proj(self):
-        self.proj_H
+        self.proj_deltaP
         
+    def proj_deltaP(self):
+        proj_l = []
+        for i,n in enumerate(self.n_proj):
+            nb = self.norbs[i]
+            proj0 = torch.einsum('ui,vi->uv', [self.phi_h[i, :nb, :n], self.phi_h[i, :nb, :n]]);
+            proj_l.append(proj0+self.V[i])
+        return proj_l
+    
     def proj_P(self):
         return self.V;
     

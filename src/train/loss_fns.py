@@ -71,14 +71,25 @@ class Losses(object):
 
             self.H.append(H[i,:nb,:nb]);
             
-        self.epsilon_h, _ = np.linalg.eigh(self.h.tolist());
+        self.epsilon_h, self.phi_h = np.linalg.eigh(self.h.tolist());
         self.epsilon_h = torch.tensor(self.epsilon_h, dtype=torch.float32).to(self.device);
+        self.phi_h = torch.tensor(self.phi_h, dtype=torch.float32).to(device);
             
     def proj_loss(self,proj):
-        return self.proj_H_loss(proj)
+        return self.proj_deltaP_loss(proj)
+    
+    def proj_deltaP_loss(self,proj):
+        loss = 0
+        for i,n in enumerate(self.n_proj):
+            nb = self.norbs[i]
+            proj0 = torch.einsum('ui,vi->uv', [self.phi_h[i, :nb, :n], self.phi_h[i, :nb, :n]]);
+            proj_pred = proj0+self.V[i]
+            loss += torch.mean((proj_pred-proj[i])**2)
+        return loss/len(self.ne), loss/len(self.ne)
         
     def proj_P_loss(self,proj):
-        return torch.mean((self.V-pad_and_stack(proj))**2);
+        loss = torch.mean((self.V-pad_and_stack(proj))**2);
+        return loss, loss
     
     def proj_H_loss(self, proj):
 

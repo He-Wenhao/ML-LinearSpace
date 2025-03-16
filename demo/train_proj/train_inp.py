@@ -19,7 +19,8 @@ params = {};
 #    'xy':0.01, 'yz':0.01, 'xz':0.01,
 #    'atomic_charge': 0.01, 'E_gap':0.2,
 #    'bond_order':0.02, 'alpha':3E-5, 'F':0.1};
-params['OPS'] = {'proj':1,'V':0.1,'H_tr':0.1}
+# params['OPS'] = {'proj':1,'V':0.1,'H_tr':0.1}
+params['OPS'] = {'proj':1}
 
 params['device'] = 'cuda:0';             # device to run the code for serial training. 
                                          # set as 'cpu' for cpu training and 'cuda:0' for gpu training
