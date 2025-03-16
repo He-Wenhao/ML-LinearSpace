@@ -59,6 +59,9 @@ class dataloader():
 
         if('proj' in obs):
             label['proj'] = torch.tensor(obs['proj'],device=self.device);
+
+        if('H_tr' in obs):
+            label['HF_E'] = obs['HF_E'];
             
         if('energy' in obs):
             label['E'] = obs['energy'];

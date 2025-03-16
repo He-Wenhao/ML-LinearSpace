@@ -10,7 +10,7 @@ import numpy as np;
 
 class predict_fns(object):
     
-    def __init__(self, h, V, T, G, ne, norbs, device, smear = 5E-3):
+    def __init__(self, h, V, T, G, ne, norbs,n_proj, device, smear = 5E-3):
 
         self.device = device;
         self.V = V;
@@ -20,6 +20,7 @@ class predict_fns(object):
         H = h+V;
         self.ne = ne;
         self.norbs = norbs;
+        self.n_proj = n_proj;
         self.epsilon, phi = np.linalg.eigh(H.tolist());
         self.epsilon = torch.tensor(self.epsilon, dtype=torch.float32).to(device);
         phi = torch.tensor(phi, dtype=torch.float32).to(device);
@@ -35,7 +36,7 @@ class predict_fns(object):
         self.H = [];
         self.phi = [];
 
-        for i, n in enumerate(ne):
+        for i, n in enumerate(n_proj):
             nb = norbs[i]
 
             self.eo.append(self.epsilon[i, :n]);
@@ -56,10 +57,18 @@ class predict_fns(object):
             self.H.append(H[i,:nb,:nb]);
     
     def proj(self):
+        self.proj_H
         
-        
+    def proj_P(self):
         return self.V;
     
+    def proj_H(self):
+        proj_l = []
+        for i,_ in enumerate(self.ne):
+            proj_pred = torch.einsum('ui,uv,vi->', [self.co[i], self.co[i]]);
+            proj_l.append(proj_pred)
+        return proj_l
+        
     
     def E(self):
         

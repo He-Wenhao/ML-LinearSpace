@@ -25,7 +25,7 @@ def pad_and_stack(proj):
 
 class Losses(object):
     
-    def __init__(self, h, V, T, G, ne, norbs, device, smear = 5E-3):
+    def __init__(self, h, V, T, G, ne, norbs,n_proj, device, smear = 5E-3):
 
         self.device = device;
         self.V = V;
@@ -35,6 +35,7 @@ class Losses(object):
         H = h+V;    # dbg
         self.ne = ne;
         self.norbs = norbs;
+        self.n_proj = n_proj;
         self.epsilon, phi = np.linalg.eigh(H.tolist());
         self.epsilon = torch.tensor(self.epsilon, dtype=torch.float32).to(device);
         phi = torch.tensor(phi, dtype=torch.float32).to(device);
@@ -50,7 +51,7 @@ class Losses(object):
         self.H = [];
         self.phi = [];
 
-        for i, n in enumerate(ne):
+        for i, n in enumerate(n_proj):
             nb = norbs[i]
 
             self.eo.append(self.epsilon[i, :n]);
@@ -70,11 +71,29 @@ class Losses(object):
 
             self.H.append(H[i,:nb,:nb]);
             
-
+        self.epsilon_h, _ = np.linalg.eigh(self.h.tolist());
+        self.epsilon_h = torch.tensor(self.epsilon_h, dtype=torch.float32).to(self.device);
             
     def proj_loss(self,proj):
+        return self.proj_H_loss(proj)
+        
+    def proj_P_loss(self,proj):
         return torch.mean((self.V-pad_and_stack(proj))**2);
+    
+    def proj_H_loss(self, proj):
 
+        overlap_grad, loss = 0, 0;
+        overlap = []
+        for i,nei in enumerate(self.ne):
+            proj_pred = torch.einsum('ui,vi->uv', [self.co[i], self.co[i]]);
+            loss += torch.mean((proj_pred-proj[i])**2)
+            overlap .append( torch.einsum('ui,uv,vi->', [self.co[i], proj[i], self.co[i]])/nei/2);
+            ovlp_term = (overlap[i]-1)*torch.einsum('uk,uv,vi->ik', [self.cv[i], proj[i], self.co[i]]) * \
+                     torch.einsum('ui,uv,vk->ik', [self.co[i], self.H[i], self.cv[i]]);
+            overlap_grad += torch.sum(self.epsilon_ij[i] * ovlp_term) * 2;
+        
+        return overlap_grad/len(self.ne), sum(overlap)/len(self.ne)
+    
     def V_loss(self):
 
         return torch.mean(self.V**2);
@@ -91,6 +110,22 @@ class Losses(object):
             
             LE_grad += grad;
             LE_out += (Ehat - E_labels[i])**2;
+        
+        return LE_grad/len(self.ne), LE_out/len(self.ne);
+    
+    def H_tr(self):
+        
+        LE_grad, LE_out = 0, 0;
+        for i,n in enumerate(self.n_proj):
+            E_labels_i = 2*torch.sum(self.epsilon_h[i, :n])
+            Ehat = 2*torch.sum(self.eo[i]);
+            co = self.co[i];
+
+            grad = 2*(Ehat-E_labels_i)*(2*torch.einsum('ij,kj,ik->',
+                                        [co, co, self.H[i]]));  # energy term loss function for gradient
+            
+            LE_grad += grad;
+            LE_out += (Ehat - E_labels_i)**2;
         
         return LE_grad/len(self.ne), LE_out/len(self.ne);
     

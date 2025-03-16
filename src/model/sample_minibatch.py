@@ -9,6 +9,28 @@ import numpy as np;
 import torch;
 from torch_cluster import radius_graph;
 from e3nn import o3;
+from pyscf import gto
+
+def get_number_of_orbitals(elements,basis):
+    """
+    Returns the number of atomic orbitals for each element in the given list under the STO-3G basis set.
+    
+    Parameters:
+    elements (list of str): List of atomic symbols (e.g., ['H', 'C', 'O'])
+
+    Returns:
+    dict: A dictionary mapping elements to the number of basis functions (orbitals).
+    """
+    orbitals = []
+    for elem in elements:
+        mol = gto.Mole()
+        mol.atom = f"{elem} 0 0 0"
+        mol.basis = basis
+        mol.spin = None
+        mol.build()
+        orbitals.append(mol.nao)  # Number of atomic orbitals
+
+    return sum(orbitals)
 
 class sampler(object):
 
@@ -71,8 +93,8 @@ class sampler(object):
 
         return tensor.to(self.device);
 
-    def sample(self, batch_ind, batch_size, irreps, op_names=[]):
-
+    def sample(self, batch_ind, batch_size, irreps, op_names=[], activeSpace='sto-3G'):
+        
         ind = list(range(len(self.data)));
 #        np.random.shuffle(ind);
         ind = ind[batch_ind*batch_size : (batch_ind+1)*batch_size];
@@ -82,6 +104,7 @@ class sampler(object):
         elements = [u['elements'] for u in data];
         natms = [len(u) for u in elements];
         num_nodes = sum(natms);
+        n_proj = [get_number_of_orbitals(u['elements'],activeSpace) for u in data]
 
         pos = torch.vstack([dp['pos'] for dp in data]);
         batch = torch.cat([torch.tensor([i]*n).to(self.device) for i,n in enumerate(natms)]);
@@ -126,7 +149,8 @@ class sampler(object):
                      'map1': map1,
                      'natm': natms,
                      'ne': [dp['ne'] for dp in data],
-                     'h': self.get_tensor(data, 'h', basis_max)
+                     'h': self.get_tensor(data, 'h', basis_max),
+                     'n_proj':n_proj
                      };
 
         batch_labels = {};
@@ -135,7 +159,7 @@ class sampler(object):
         
         # op_names += ['atomic_charge','E_gap','B','alpha','F'];
 
-        for op_name in op_names:
+        for op_name in op_names.keys()-['V','H_tr']:
             batch_labels[op_name] = self.get_list(labels, op_name);
 
         return minibatch, batch_labels, ind;

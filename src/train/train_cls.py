@@ -116,8 +116,8 @@ class trainer():
         for i, op_name in enumerate(op_names):
             
             if(op_name == 'proj'):
-                L_grads[op_name] = loss_calculator.proj_loss(labels['proj']);
-                L_ave[i] += L_grads[op_name];
+                L_grads[op_name], loss = loss_calculator.proj_loss(labels['proj']);
+                L_ave[i] += loss;
             
             elif(op_name == 'V'):
         
@@ -127,6 +127,12 @@ class trainer():
             elif(op_name == 'E'):
                 
                 LE, LE_out = loss_calculator.E_loss(labels['Ee']);
+                L_grads[op_name] = LE;
+                L_ave[i] += LE_out;
+                            
+            elif(op_name == 'H_tr'):
+                
+                LE, LE_out = loss_calculator.H_tr();
                 L_grads[op_name] = LE;
                 L_ave[i] += LE_out;
             
@@ -247,7 +253,8 @@ class trainer():
                 h = minibatch['h'];
                 ne = minibatch['ne'];
                 norbs = minibatch['norbs'];
-                loss_calculator = Losses(h, V, T, G, ne, norbs, self.device);
+                n_proj = minibatch['n_proj']
+                loss_calculator = Losses(h, V, T, G, ne, norbs, n_proj, self.device);
                 
                 loss_grad, loss_out = self.build_loss(loss_calculator, labels, ind, op_names);
 
