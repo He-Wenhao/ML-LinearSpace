@@ -82,8 +82,8 @@ class Losses(object):
             
     def proj_loss(self,proj):
         # return self.proj_deltaP_loss(proj)
-        return self.proj_test_loss(proj)
-        # return self.proj_P_loss(proj)
+        #return self.proj_test_loss(proj)
+        return self.proj_P_loss(proj)
         
     def proj_test_loss(self,proj):
         loss = torch.mean((self.V-pad_and_stack(self.proj0))**2);
