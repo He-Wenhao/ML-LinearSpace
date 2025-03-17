@@ -61,7 +61,7 @@ class predict_fns(object):
     
     
     def proj(self):
-        self.proj_deltaP
+        return self.proj_deltaP()
         
     def proj_deltaP(self):
         proj_l = []

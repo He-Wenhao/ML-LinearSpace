@@ -2,6 +2,7 @@ from basis.integral import integrate
 from model.model_cls import V_theta
 from deploy.predictor import predict_fns
 from model.sample_minibatch import sampler as sample_train
+from model.sample_minibatch import get_number_of_orbitals
 from data.loader import dataloader
 import numpy as np
 import torch
@@ -116,7 +117,8 @@ class estimator(estimator_test):
             h = minibatch['h'];
             ne = minibatch['ne'];
             norbs = minibatch['norbs'];
-            property_calc = predict_fns(h, V, T, G, ne, norbs, self.device);
+            n_proj = minibatch['n_proj'];
+            property_calc = predict_fns(h, V, T, G, ne, norbs,n_proj, self.device);
             
             properties = self.evaluate_properties(property_calc, ind, op_names);
 
@@ -212,7 +214,7 @@ class sampler(sample_train):
 
         sample_train.__init__(self, data_in, [], device);
     
-    def sample(self, batch_ind, batch_size, irreps, op_names=[]):
+    def sample(self, batch_ind, batch_size, irreps, op_names=[], activeSpace='sto-3G'):
 
         ind = list(range(len(self.data)));
         ind = ind[batch_ind*batch_size : (batch_ind+1)*batch_size];
@@ -221,6 +223,7 @@ class sampler(sample_train):
         elements = [u['elements'] for u in data];
         natms = [len(u) for u in elements];
         num_nodes = sum(natms);
+        n_proj = [get_number_of_orbitals(u['elements'],activeSpace) for u in data]
 
         pos = torch.vstack([dp['pos'] for dp in data]);
         batch = torch.cat([torch.tensor([i]*n).to(self.device) for i,n in enumerate(natms)]);
@@ -265,7 +268,8 @@ class sampler(sample_train):
                      'map1': map1,
                      'natm': natms,
                      'ne': [dp['ne'] for dp in data],
-                     'h': self.get_tensor(data, 'h', basis_max)
+                     'h': self.get_tensor(data, 'h', basis_max),
+                     'n_proj':n_proj
                      };
 
         return minibatch, ind;
