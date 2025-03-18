@@ -34,7 +34,7 @@ def get_number_of_orbitals(elements,basis):
 
 class sampler(object):
 
-    def __init__(self, data_in, labels, device, min_radius: float = 0.5, max_radius: float = 3.):
+    def __init__(self, data_in, labels, device, min_radius: float = 0.5, max_radius: float = 10.):
 
         self.data = data_in;
         self.labels = labels;
